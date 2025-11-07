@@ -47,6 +47,6 @@ public:
 	);
 
 private:
-	static void ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData);
 	static void ParseSkeleton(FbxNode* Root, FFBXSkeletonData& OutSkeleton);
+	static void ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData);
 };
