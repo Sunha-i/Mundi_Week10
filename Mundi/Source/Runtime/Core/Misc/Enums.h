@@ -119,6 +119,54 @@ inline FArchive& operator<<(FArchive& Ar, FVector& V) { Ar.Serialize(&V.X, sizeo
 inline FArchive& operator<<(FArchive& Ar, FVector2D& V) { Ar.Serialize(&V.X, sizeof(float) * 2); return Ar; }
 inline FArchive& operator<<(FArchive& Ar, FVector4& V) { Ar.Serialize(&V.X, sizeof(float) * 4); return Ar; }
 
+struct FSkinnedVertex
+{
+    FVector pos;
+    FVector normal;
+    FVector2D uv;
+    int boneIndices[8];
+    float boneWeights[8];
+};
+struct Vector3 
+{
+    float x, y, z;
+
+    Vector3 operator+(const Vector3& other) const {
+        return { x + other.x, y + other.y, z + other.z };
+    }
+
+    Vector3 operator*(float scalar) const {
+        return { x * scalar, y * scalar, z * scalar };
+    }
+};
+struct Matrix4x4 {
+    float m[4][4];
+
+    Vector3 TransformPosition(const Vector3& v) const {
+        return {
+            m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3],
+            m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3],
+            m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3]
+        };
+    }
+};
+
+struct Bone
+{
+    FString Name;          // 본 이름 (FBX에서 읽어옴)
+    int ParentIndex = -1;      // 부모 본 인덱스 (트리 구조 연결용)
+
+    Matrix4x4 BindPose;        // 본의 초기 바인드 포즈 (BindPose)
+    Matrix4x4 InverseBindPose; // 바인드 포즈의 역행렬
+    Matrix4x4 BoneTransform;   // 현재 프레임에서의 본 월드 행렬
+    Matrix4x4 SkinningMatrix;  // = BoneTransform * InverseBindPose
+};
+
+
+//struct Bone 
+//{
+//    Matrix4x4 skinningMatrix; // = BoneTransform * InverseBindPose
+//};
 // 직렬화 포맷 (FVertexDynamic와 역할이 달라서 분리됨)
 struct FNormalVertex
 {
