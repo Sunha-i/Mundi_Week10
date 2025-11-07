@@ -55,7 +55,9 @@
     <FxCompile Include="Shaders\UI\TextBillboard.hlsl">
       <Filter>Shaders\UI</Filter>
     </FxCompile>
-    <FxCompile Include="Shaders\PostProcess\GammaCorrection_PS.hlsl" />
+    <FxCompile Include="Shaders\PostProcess\GammaCorrection_PS.hlsl">
+      <Filter>Shaders\PostProcess</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -501,7 +503,18 @@
     <ClCompile Include="Source\Runtime\Engine\GameFramework\Camera\CamMod_Vignette.cpp">
       <Filter>Source\Runtime\Engine\GameFramework\Camera</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Runtime\Renderer\PostProcessing\GammaPass.cpp" />
+    <ClCompile Include="Source\Runtime\Renderer\PostProcessing\GammaPass.cpp">
+      <Filter>Source\Runtime\Renderer\PostProcessing</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\Scripting\LuaBindHelpers.cpp">
+      <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\Scripting\LuaBindingRegistry.cpp">
+      <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\Scripting\LuaComponentProxy.cpp">
+      <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -1090,8 +1103,21 @@
     <ClInclude Include="Source\Runtime\Engine\GameFramework\Camera\CamMod_Vignette.h">
       <Filter>Source\Runtime\Engine\GameFramework\Camera</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Runtime\Renderer\PostProcessing\GammaPass.h" />
-    <ClInclude Include="ThirdParty\ImGui\imgui_curve.hpp" />
+    <ClInclude Include="Source\Runtime\Renderer\PostProcessing\GammaPass.h">
+      <Filter>Source\Runtime\Renderer\PostProcessing</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\ImGui\imgui_curve.hpp">
+      <Filter>ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\Scripting\LuaBindHelpers.h">
+      <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\Scripting\LuaBindingRegistry.h">
+      <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\Scripting\LuaComponentProxy.h">
+      <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shaders">
