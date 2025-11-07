@@ -118,6 +118,18 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
         return false;
     }
 
+    // 좌표축/단위계를 엔진 표준으로 변환 (DirectX 좌표, 미터)
+    {
+        const FbxAxisSystem desiredAxis = FbxAxisSystem::DirectX; // Left-handed, +Y up
+        desiredAxis.ConvertScene(mScene);
+
+        const FbxSystemUnit desiredUnit = FbxSystemUnit::m; // meters
+        if (mScene->GetGlobalSettings().GetSystemUnit() != desiredUnit)
+        {
+            desiredUnit.ConvertScene(mScene);
+        }
+    }
+
     // 메시를 전부 삼각형화 (Quads → Triangles)
     {
         FbxGeometryConverter Converter(mManager);
@@ -125,7 +137,8 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
     }
 
     // 이전 결과 초기화
-    Vertices.Empty();
+    SkinnedVertices.clear();
+    Bones.clear();
 
     // Root Node부터 순회 시작
     if (FbxNode* Root = mScene->GetRootNode())
@@ -139,153 +152,9 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
 
     Importer->Destroy();
 
-    UE_LOG("FFBXImporter - Loaded '%s' | VertexCount=%d", FilePath.c_str(), Vertices.Num());
+    UE_LOG("FFBXImporter - Loaded '%s' | VertexCount=%d", FilePath.c_str(), (int)SkinnedVertices.size());
     return true;
 }
-
-void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
-{
-    if (!Mesh)
-        return;
-
-    // ControlPoint(=Vertex) 개수 확인
-    const int VertexCount = Mesh->GetControlPointsCount();
-    if (VertexCount <= 0)
-        return;
-
-    SkinnedVertices.resize(VertexCount);
-
-    // 스킨 디포머 개수 확인
-    const int SkinCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
-    if (SkinCount <= 0)
-        return;
-
-    // 일반적으로 하나의 스킨만 존재
-    FbxSkin* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(0, FbxDeformer::eSkin));
-    const int ClusterCount = Skin->GetClusterCount();
-    Bones.reserve(ClusterCount);
-
-    // ================================================================
-    // ① 각 클러스터(=본) 순회하며 Bone 정보 생성
-    // ================================================================
-    for (int ClusterIndex = 0; ClusterIndex < ClusterCount; ++ClusterIndex)
-    {
-        FbxCluster* Cluster = Skin->GetCluster(ClusterIndex);
-        if (!Cluster)
-            continue;
-
-        FbxNode* BoneNode = Cluster->GetLink();
-        if (!BoneNode)
-            continue;
-
-        Bone BoneData{};
-        BoneData.Name = BoneNode->GetName();
-
-        // 메시 기준 Transform
-        FbxAMatrix MeshTransformMatrix;
-        Cluster->GetTransformMatrix(MeshTransformMatrix);
-
-        // 본 기준 Transform
-        FbxAMatrix BoneTransformMatrix;
-        Cluster->GetTransformLinkMatrix(BoneTransformMatrix);
-
-        // InverseBindPose 계산
-        FbxAMatrix BoneTransformMatrixInv = BoneTransformMatrix.Inverse();
-        FbxAMatrix OffsetMatrix = BoneTransformMatrixInv * MeshTransformMatrix;
-
-        // FBX → Matrix4x4 변환 (람다 X)
-        Matrix4x4 BindPoseMat{};
-        Matrix4x4 InverseBindPoseMat{};
-        Matrix4x4 BoneTransformMat{};
-
-        for (int Row = 0; Row < 4; ++Row)
-        {
-            for (int Col = 0; Col < 4; ++Col)
-            {
-                BindPoseMat.m[Row][Col] = static_cast<float>(BoneTransformMatrix.Get(Row, Col));
-                InverseBindPoseMat.m[Row][Col] = static_cast<float>(OffsetMatrix.Get(Row, Col));
-            }
-        }
-
-        // 현재 프레임의 글로벌 본 행렬 계산
-        FbxAMatrix GlobalTransform = BoneNode->EvaluateGlobalTransform();
-        for (int Row = 0; Row < 4; ++Row)
-        {
-            for (int Col = 0; Col < 4; ++Col)
-            {
-                BoneTransformMat.m[Row][Col] = static_cast<float>(GlobalTransform.Get(Row, Col));
-            }
-        }
-
-        BoneData.BindPose = BindPoseMat;
-        BoneData.InverseBindPose = InverseBindPoseMat;
-        BoneData.BoneTransform = BoneTransformMat;
-
-        // 스키닝 행렬 = BoneTransform × InverseBindPose
-        Matrix4x4 SkinningMat{};
-        for (int Row = 0; Row < 4; ++Row)
-        {
-            for (int Col = 0; Col < 4; ++Col)
-            {
-                float Sum = 0.0f;
-                for (int K = 0; K < 4; ++K)
-                    Sum += BoneData.BoneTransform.m[Row][K] * BoneData.InverseBindPose.m[K][Col];
-
-                SkinningMat.m[Row][Col] = Sum;
-            }
-        }
-        BoneData.SkinningMatrix = SkinningMat;
-
-        Bones.push_back(BoneData);
-
-        // ================================================================
-        // ② 각 Bone이 영향을 주는 정점에 인덱스/가중치 등록
-        // ================================================================
-        int* Indices = Cluster->GetControlPointIndices();
-        double* Weights = Cluster->GetControlPointWeights();
-        int ControlPointCount = Cluster->GetControlPointIndicesCount();
-
-        for (int i = 0; i < ControlPointCount; ++i)
-        {
-            int VertexIndex = Indices[i];
-            float Weight = static_cast<float>(Weights[i]);
-
-            if (VertexIndex < 0 || VertexIndex >= VertexCount)
-                continue;
-
-            FSkinnedVertex& Vertex = SkinnedVertices[VertexIndex];
-
-            // boneIndices[4], boneWeights[4] 중 비어 있는 슬롯에 채움
-            for (int Slot = 0; Slot < 8; ++Slot)
-            {
-                if (Vertex.boneWeights[Slot] == 0.0f)
-                {
-                    Vertex.boneIndices[Slot] = ClusterIndex;
-                    Vertex.boneWeights[Slot] = Weight;
-                    break;
-                }
-            }
-        }
-    }
-
-    // ================================================================
-    // ③ 가중치 정규화 (합 = 1.0)
-    // ================================================================
-    for (size_t i = 0; i < SkinnedVertices.size(); ++i)
-    {
-        FSkinnedVertex& V = SkinnedVertices[i];
-        float Sum = V.boneWeights[0] + V.boneWeights[1] + V.boneWeights[2] + V.boneWeights[3];
-        if (Sum > 0.0f)
-        {
-            for (int Slot = 0; Slot <8; ++Slot)
-                V.boneWeights[Slot] /= Sum;
-        }
-    }
-
-    UE_LOG("ProcessSkin 완료: Bones=%d, Vertices=%d", Bones.Num(), SkinnedVertices.Num());
-}
-
-
 // ============================================================================
 // ProcessNode()
 // ----------------------------------------------------------------------------
@@ -301,7 +170,7 @@ void FFBXImporter::ProcessNode(FbxNode* Node)
         // 메시 처리
         ProcessMesh(Mesh);
 
-        // 💡 스킨 메시라면 본 데이터도 추출
+        // 스킨 메시라면 본 데이터도 추출
         if (Mesh->GetDeformerCount(FbxDeformer::eSkin) > 0)
         {
             UE_LOG("FFBXImporter - Skinned Mesh detected, extracting skin data...");
@@ -318,6 +187,173 @@ void FFBXImporter::ProcessNode(FbxNode* Node)
 }
 
 
+// LogSummary removed; use WriteDebugDump instead.
+
+bool FFBXImporter::WriteDebugDump(const std::string& FilePath) const
+{
+    std::ofstream out(FilePath, std::ios::out | std::ios::trunc);
+    if (!out.is_open())
+        return false;
+
+    out.setf(std::ios::fixed, std::ios::floatfield);
+
+    out << "FBXImporter Debug Dump\n";
+    out << "SkinnedVertices=" << SkinnedVertices.size() << "\n";
+    out << "Bones=" << Bones.Num() << "\n\n";
+
+    // Bones
+    out << "[Bones]\n";
+    auto writeMat = [&](const Matrix4x4& M, const char* label)
+    {
+        out << label << "=" << "\n";
+        for (int r = 0; r < 4; ++r)
+        {
+            out << "  "
+                << M.m[r][0] << ' ' << M.m[r][1] << ' ' << M.m[r][2] << ' ' << M.m[r][3]
+                << "\n";
+        }
+    };
+
+    for (int i = 0; i < Bones.Num(); ++i)
+    {
+        const Bone& B = Bones[i];
+        out << "- index=" << i << ", name=" << B.Name << ", parentIndex=" << B.ParentIndex << "\n";
+        writeMat(B.BindPose,        "  BindPose");
+        writeMat(B.InverseBindPose, "  InverseBindPose");
+        writeMat(B.BoneTransform,   "  BoneTransform");
+        writeMat(B.SkinningMatrix,  "  SkinningMatrix");
+        out << "\n";
+    }
+
+    // Vertices
+    out << "[Vertices]\n";
+    for (size_t i = 0; i < SkinnedVertices.size(); ++i)
+    {
+        const FSkinnedVertex& v = SkinnedVertices[i];
+        out << "- index=" << i
+            << ", pos=(" << v.pos.X << ' ' << v.pos.Y << ' ' << v.pos.Z << ")"
+            << ", normal=(" << v.normal.X << ' ' << v.normal.Y << ' ' << v.normal.Z << ")"
+            << ", uv=(" << v.uv.X << ' ' << v.uv.Y << ")\n";
+
+        out << "  influences=";
+        bool first = true;
+        float sum = 0.0f;
+        for (int s = 0; s < 8; ++s)
+        {
+            if (v.boneWeights[s] > 0.0f)
+            {
+                if (!first) out << ", ";
+                first = false;
+                out << v.boneIndices[s] << ':' << v.boneWeights[s];
+                sum += v.boneWeights[s];
+            }
+        }
+        if (first) out << "(none)";
+        out << ", sum=" << sum << "\n\n";
+    }
+
+    out.flush();
+    return true;
+}
+
+void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
+{
+    if (!Mesh) return;
+
+    const int VertexCount = Mesh->GetControlPointsCount();
+    if (VertexCount <= 0) return;
+    SkinnedVertices.resize(VertexCount);
+
+    const int SkinCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
+    if (SkinCount <= 0) return;
+
+    FbxSkin* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(0, FbxDeformer::eSkin));
+    const int ClusterCount = Skin->GetClusterCount();
+    Bones.Reserve(ClusterCount);
+
+    TArray<uint8> InfluenceCount;
+    InfluenceCount.SetNum(VertexCount); // 0으로 초기화
+
+    for (int ClusterIndex = 0; ClusterIndex < ClusterCount; ++ClusterIndex)
+    {
+        FbxCluster* Cluster = Skin->GetCluster(ClusterIndex);
+        if (!Cluster) continue;
+
+        FbxNode* BoneNode = Cluster->GetLink();
+        if (!BoneNode) continue;
+
+        // FBX 공간에서 계산
+        FbxAMatrix MeshM;  Cluster->GetTransformMatrix(MeshM);
+        FbxAMatrix BoneM;  Cluster->GetTransformLinkMatrix(BoneM);
+        FbxAMatrix InvBindM = BoneM.Inverse() * MeshM; // OffsetMatrix
+        const FbxAMatrix GlobalM = BoneNode->EvaluateGlobalTransform();
+        const FbxAMatrix SkinningM = GlobalM * InvBindM;
+
+        // 본 정보 제자리 생성 (복사/이동 제거)
+        Bone& OutBone = Bones.emplace_back();
+        OutBone.Name = BoneNode->GetName();
+        OutBone.BindPose = ConvertMatrix(BoneM);
+        OutBone.InverseBindPose = ConvertMatrix(InvBindM);
+        OutBone.BoneTransform = ConvertMatrix(GlobalM);
+        OutBone.SkinningMatrix = ConvertMatrix(SkinningM);
+
+        // 본이 영향을 주는 정점에 상위 4개만 유지
+        int* Indices = Cluster->GetControlPointIndices();
+        double* Weights = Cluster->GetControlPointWeights();
+        const int CPCount = Cluster->GetControlPointIndicesCount();
+
+        for (int i = 0; i < CPCount; ++i)
+        {
+            const int v = Indices[i];
+            const float w = static_cast<float>(Weights[i]);
+            if (v < 0 || v >= VertexCount || w <= 0.0f) continue;
+
+            FSkinnedVertex& SV = SkinnedVertices[v];
+            uint8& Count = InfluenceCount[v];
+            constexpr int MaxInf = 4;
+
+            if (Count < MaxInf)
+            {
+                SV.boneIndices[Count] = ClusterIndex;
+                SV.boneWeights[Count] = w;
+                ++Count;
+            }
+            else
+            {
+                int minIdx = 0; float minW = SV.boneWeights[0];
+                for (int s = 1; s < MaxInf; ++s)
+                {
+                    if (SV.boneWeights[s] < minW) { minW = SV.boneWeights[s]; minIdx = s; }
+                }
+                if (w > minW)
+                {
+                    SV.boneIndices[minIdx] = ClusterIndex;
+                    SV.boneWeights[minIdx] = w;
+                }
+            }
+        }
+    }
+
+    // 사용한 슬롯만 정규화 + 나머지 0으로 정리
+    for (int i = 0; i < (int)SkinnedVertices.size(); ++i)
+    {
+        FSkinnedVertex& V = SkinnedVertices[i];
+        const int Used = std::min<int>(InfluenceCount[i], 4);
+
+        float Sum = 0.0f; for (int s = 0; s < Used; ++s) Sum += V.boneWeights[s];
+        if (Sum > 0.0f)
+        {
+            const float Inv = 1.0f / Sum;
+            for (int s = 0; s < Used; ++s) V.boneWeights[s] *= Inv;
+        }
+        for (int s = Used; s < 8; ++s) { V.boneIndices[s] = 0; V.boneWeights[s] = 0.0f; }
+    }
+
+    UE_LOG("ProcessSkin 완료: Bones=%d, SkinnedVertices=%d", Bones.Num(), SkinnedVertices.Num());
+
+}
+
+
 // ============================================================================
 // ProcessMesh()
 // ----------------------------------------------------------------------------
@@ -329,33 +365,51 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
     if (!Mesh)
         return;
 
-    // 정점 데이터 
+    // 정점 데이터 (ControlPoint 기준으로 스킨 정점 채움)
     const int ControlPointCount = Mesh->GetControlPointsCount();
     const FbxVector4* ControlPoints = Mesh->GetControlPoints();
-    // 삼각형 면의 정보 
+    // 삼각형의 수 
     const int PolygonCount = Mesh->GetPolygonCount();
-
+    // 여러 UV 세트(예: Lightmap UV, Diffuse UV)가 있을 수 있지만 보통 첫 번째 UVSet만 사용한다. 
     const char* UvSetName = GetFirstUVSetName(Mesh);
     const bool bHasUV = (UvSetName != nullptr);
 
-    // 모든 폴리곤(삼각형)을 순회
+    // 스킨 정점 배열을 ControlPoint 개수로 맞춰 둔다
+    if ((int)SkinnedVertices.size() < ControlPointCount)
+        SkinnedVertices.resize(ControlPointCount);
+
+    // 현재 씬 단위계를 가져와서 포지션을 미터 단위로 정규화(안전장치)
+    float unitToMeters = 1.0f;
+    if (mScene)
+    {
+        const double scale = mScene->GetGlobalSettings().GetSystemUnit().GetScaleFactor();
+        if (scale > 0.0)
+            unitToMeters = static_cast<float>(1.0 / scale);
+    }
+
+    // 모든 폴리곤(삼각형)을 순회하며, 각 ControlPoint 인덱스에 위치/노멀/UV 기록
     for (int PolyIndex = 0; PolyIndex < PolygonCount; ++PolyIndex)
     {
+        // 삼각형이면 PolySize 값은 3이다. 
         const int PolySize = Mesh->GetPolygonSize(PolyIndex);
         for (int Corner = 0; Corner < PolySize; ++Corner)
         {
+            // 폴리곤 면이 참조하는 실제 정점 인덱스를 가져오는 핵심 코드
             const int ControlPointIndex = Mesh->GetPolygonVertex(PolyIndex, Corner);
             if (ControlPointIndex < 0 || ControlPointIndex >= ControlPointCount)
+            {
                 continue;
+            }
 
-            FNormalVertex VertexData{};
+            FSkinnedVertex& VertexData = SkinnedVertices[ControlPointIndex];
 
             // Position
             const FbxVector4& P = ControlPoints[ControlPointIndex];
-            VertexData.pos = FVector((float)P[0], (float)P[1], (float)P[2]);
+            VertexData.pos = FVector((float)P[0] * unitToMeters, (float)P[1] * unitToMeters, (float)P[2] * unitToMeters);
 
-            // Normal
+            // Normal (per-polygon vertex normal as a reasonable default)
             FbxVector4 N(0, 0, 1, 0);
+            // 해당 위치에서의 노말값 가져오기 
             if (Mesh->GetPolygonVertexNormal(PolyIndex, Corner, N))
             {
                 const double len = N.Length();
@@ -378,24 +432,24 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
                 FbxVector2 UV(0.0, 0.0);
                 bool bUnmapped = false;
                 if (Mesh->GetPolygonVertexUV(PolyIndex, Corner, UvSetName, UV, bUnmapped))
-                    VertexData.tex = FVector2D((float)UV[0], (float)UV[1]);
+                    VertexData.uv = FVector2D((float)UV[0], (float)UV[1]);
                 else
-                    VertexData.tex = FVector2D(0.0f, 0.0f);
+                    VertexData.uv = FVector2D(0.0f, 0.0f);
             }
             else
             {
-                VertexData.tex = FVector2D(0.0f, 0.0f);
+                VertexData.uv = FVector2D(0.0f, 0.0f);
             }
 
-            // 기본값 (색상/탄젠트)
-            VertexData.Tangent = FVector4(0, 0, 0, 1);
-            VertexData.color = FVector4(1, 1, 1, 1);
-
-            // 결과 저장
-            Vertices.Add(VertexData);
+            // 스킨용 기본값 초기화 (나중에 ProcessSkin에서 덮어씀)
+            for (int slot = 0; slot < 8; ++slot)
+            {
+                VertexData.boneIndices[slot] = 0;
+                VertexData.boneWeights[slot] = 0.0f;
+            }
         }
     }
 
-    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, TotalVerts=%d",
-        PolygonCount, ControlPointCount, Vertices.Num());
+    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, SkinnedVerts=%d",
+        PolygonCount, ControlPointCount, (int)SkinnedVertices.size());
 }

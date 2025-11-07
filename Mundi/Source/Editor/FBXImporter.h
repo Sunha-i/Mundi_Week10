@@ -22,6 +22,9 @@ public:
     // FBX 파일 로드 및 정점 데이터 추출
     bool LoadFBX(const std::string& FilePath);
 
+    // 텍스트 덤프를 파일로 기록
+    bool WriteDebugDump(const std::string& FilePath) const;
+
 public:
     TArray<FSkinnedVertex> SkinnedVertices;
     TArray<Bone> Bones;
@@ -42,7 +45,4 @@ private:
 private:
     FbxManager* mManager = nullptr;  // FBX SDK Manager
     FbxScene* mScene = nullptr;  // FBX Scene 객체
-
-    // 읽어온 정점 데이터 (임시 캐싱용)
-    TArray<FNormalVertex> Vertices;
 };

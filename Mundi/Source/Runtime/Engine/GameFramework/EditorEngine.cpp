@@ -4,6 +4,7 @@
 #include "SelectionManager.h"
 #include "FAudioDevice.h"
 #include <ObjManager.h>
+#include "FBXImporter.h"
 
 
 float UEditorEngine::ClientWidth = 1024.0f;
@@ -204,6 +205,30 @@ bool UEditorEngine::Startup(HINSTANCE hInstance)
     // 슬레이트 매니저 (singleton)
     FRect ScreenRect(0, 0, ClientWidth, ClientHeight);
     SLATE.Initialize(RHIDevice.GetDevice(), GWorld, ScreenRect);
+
+    // --- FBX Importer 테스트 (상대 경로) ---
+    {
+        FFBXImporter Importer;
+        const FString FBXPath = GDataDir + "/Model/Ch46_nonPBR.fbx";
+        if (Importer.LoadFBX(FBXPath))
+        {
+            UE_LOG("[FBX TEST] Loaded '%s'", FBXPath.c_str());
+            namespace fs = std::filesystem;
+            fs::path dumpPath = fs::path(FBXPath).replace_extension(".dump.txt");
+            if (Importer.WriteDebugDump(dumpPath.string()))
+            {
+                UE_LOG("[FBX TEST] Dump written: %s", dumpPath.string().c_str());
+            }
+            else
+            {
+                UE_LOG("[FBX TEST] Failed to write dump: %s", dumpPath.string().c_str());
+            }
+        }
+        else
+        {
+            UE_LOG("[error] [FBX TEST] Failed to load '%s'", FBXPath.c_str());
+        }
+    }
 
     // 최근에 사용한 레벨 불러오기를 시도합니다.
     GWorld->TryLoadLastUsedLevel();
