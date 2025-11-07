@@ -1,13 +1,11 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "LuaManager.h"
 #include "LuaComponentProxy.h"
 #include "GameObject.h"
 #include "ObjectIterator.h"
 #include "CameraActor.h"
 #include "CameraComponent.h"
-#include "BillboardComponent.h"
 #include "PlayerCameraManager.h"
-#include "AudioComponent.h"
 #include <tuple>
 
 sol::object MakeCompProxy(sol::state_view SolState, void* Instance, UClass* Class) {
@@ -17,6 +15,13 @@ sol::object MakeCompProxy(sol::state_view SolState, void* Instance, UClass* Clas
     Proxy.Class = Class;
     return sol::make_object(SolState, std::move(Proxy));
 }
+
+// Note : 현재 Lua 바인딩이 일관성이 없음, 개선 필요
+// component property는 자동 등록되고 있음
+// component function은 해당 component .cpp 위에 매크로로 등록하면 됨(staticmeshcomponent.cpp 상단 참고)
+// 기타 어쩔 수 없이 수동 바인딩해야하는 건,
+// SharedLib["Input"] = Lua->create_table(); 등 모듈화 권장
+// 문제 - 함수 중복 생길 시 위험 => 모듈화 권장 
 
 FLuaManager::FLuaManager()
 {
@@ -340,8 +345,7 @@ FLuaManager::FLuaManager()
 
     RegisterComponentProxy(*Lua);
     ExposeGlobalFunctions();
-    ExposeAllComponentsToLua();
-    ExposeComponentFunctions();
+    ExposeAllPropertiesToLua();
 
     // 위 등록 마친 뒤 fall back 설정 : Shared lib의 fall back은 G
     sol::table MetaTableShared = Lua->create_table();
@@ -379,7 +383,7 @@ void FLuaManager::RegisterComponentProxy(sol::state& Lua) {
     );
 }
 
-void FLuaManager::ExposeAllComponentsToLua()
+void FLuaManager::ExposeAllPropertiesToLua()
 {
     SharedLib["Components"] = Lua->create_table();
 
@@ -421,38 +425,6 @@ void FLuaManager::ExposeAllComponentsToLua()
             return MakeCompProxy(*Lua, Comp, Class);
         }
     );
-}
-
-// 특정 컴포넌트의 함수 추가 바인딩
-void FLuaManager::ExposeComponentFunctions()
-{
-    //// --- UBillboardComponent 바인딩 추가 ---
-    //UClass* BillboardCompClass = UBillboardComponent::StaticClass();
-    //if (BillboardCompClass)
-    //{
-    //    // UBillboardComponent용 함수 테이블을 가져오거나 생성합니다.
-    //    sol::table FuncTable = GComponentFunctionTables.count(BillboardCompClass)
-    //        ? GComponentFunctionTables[BillboardCompClass] // 이미 있다면 가져오기
-    //        : Lua->create_table();                         // 없다면 새로 생성
-
-    //    // SetTextureName 바인딩
-    //    // (Lua에서는 더 간단하게 SetTexture로 노출)
-    //    FuncTable.set_function("SetTexture",
-    //        [](LuaComponentProxy& Proxy, const FString& TexturePath)
-    //        {
-    //            // 타입 안정성 확인
-    //            if (Proxy.Instance && Proxy.Class == UBillboardComponent::StaticClass())
-    //            {
-    //                // 실제 인스턴스로 캐스팅 후 C++ 함수 호출
-    //                auto* Comp = static_cast<UBillboardComponent*>(Proxy.Instance);
-    //                Comp->SetTexture(TexturePath);
-    //            }
-    //        }
-    //    );
-
-    //    // 전역 맵에 테이블 등록 (필수)
-    //    GComponentFunctionTables[BillboardCompClass] = FuncTable;
-    //}
 }
 
 void FLuaManager::ExposeGlobalFunctions()
@@ -608,29 +580,6 @@ void FLuaManager::ExposeGlobalFunctions()
             }
         }
     );
-
-    // --- UAudioComponent bindings ---
-    //UClass* AudioCompClass = UAudioComponent::StaticClass();
-    //if (AudioCompClass)
-    //{
-    //    sol::table FuncTable = GComponentFunctionTables.count(AudioCompClass)
-    //        ? GComponentFunctionTables[AudioCompClass]
-    //        : Lua->create_table();
-
-    //    FuncTable.set_function("PlayOneShot",
-    //        [](LuaComponentProxy& Proxy, uint32 SlotIndex)
-    //        {
-    //            if (Proxy.Instance && Proxy.Class == UAudioComponent::StaticClass())
-    //            {
-    //                auto* Comp = static_cast<UAudioComponent*>(Proxy.Instance);
-    //                Comp->PlaySlot(SlotIndex);
-    //                // UE_LOG("Sound Slot Index : %d", SlotIndex);
-    //            }
-    //        }
-    //    );
-
-    //    GComponentFunctionTables[AudioCompClass] = FuncTable;
-    //}
 }
 
 bool FLuaManager::LoadScriptInto(sol::environment& Env, const FString& Path) {

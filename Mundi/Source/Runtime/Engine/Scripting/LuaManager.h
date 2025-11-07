@@ -15,8 +15,7 @@ public:
     sol::environment CreateEnvironment();
 
     void RegisterComponentProxy(sol::state& Lua);
-    void ExposeAllComponentsToLua();
-    void ExposeComponentFunctions();
+    void ExposeAllPropertiesToLua();
     void ExposeGlobalFunctions();
 
     bool LoadScriptInto(sol::environment& Env, const FString& Path);
