@@ -3,8 +3,10 @@
 #include "FBXManager.h"
 #include "PathUtils.h"
 #include "AABB.h"
-#include <d3d11.h>
+#include "D3D11RHI.h"
+#include "VertexData.h"
 
+IMPLEMENT_CLASS(USkeletalMesh)
 
 void USkeletalMesh::Load(const FString& InFilePath, ID3D11Device* InDevice)
 {
@@ -42,16 +44,21 @@ void USkeletalMesh::CreateVertexBuffer(const FSkeletalMesh* InMesh, ID3D11Device
     if (!InMesh || InMesh->Vertices.empty()) return;
     if (VertexBuffer) { VertexBuffer->Release(); VertexBuffer = nullptr; }
 
-    D3D11_BUFFER_DESC vbd{};
-    vbd.Usage = D3D11_USAGE_DEFAULT;
-    vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    vbd.CPUAccessFlags = 0;
-    vbd.ByteWidth = static_cast<UINT>(sizeof(FSkinnedVertex) * InMesh->Vertices.size());
+    // Convert to FNormalVertex so we can reuse the existing FVertexDynamic pipeline (Uber shader)
+    std::vector<FNormalVertex> temp;
+    temp.reserve(InMesh->Vertices.size());
+    for (const FSkinnedVertex& sv : InMesh->Vertices)
+    {
+        FNormalVertex v{};
+        v.pos = sv.pos;
+        v.normal = sv.normal;
+        v.tex = sv.uv;
+        v.Tangent = FVector4(0,0,0,0);
+        v.color = FVector4(1,1,1,1);
+        temp.push_back(v);
+    }
 
-    D3D11_SUBRESOURCE_DATA vinit{};
-    vinit.pSysMem = InMesh->Vertices.data();
-
-    HRESULT hr = InDevice->CreateBuffer(&vbd, &vinit, &VertexBuffer);
+    HRESULT hr = D3D11RHI::CreateVertexBuffer<FVertexDynamic>(InDevice, temp, &VertexBuffer);
     assert(SUCCEEDED(hr));
 }
 
