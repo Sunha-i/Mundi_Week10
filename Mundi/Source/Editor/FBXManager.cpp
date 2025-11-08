@@ -120,6 +120,11 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	FFBXImporter Importer;
 	if (!Importer.LoadFBX(NormalizedPath))
 	{
+    {
+        std::string DumpPath = (CacheBase + ".uvdump.txt");
+        Importer.WriteDebugDump(DumpPath);
+        UE_LOG("[FBXManager] Wrote UV debug dump: %s", DumpPath.c_str());
+    }
 		UE_LOG("[FBXManager] Failed to load FBX '%s'", NormalizedPath.c_str());
 		return nullptr;
 	}

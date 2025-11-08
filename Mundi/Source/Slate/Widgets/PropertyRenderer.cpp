@@ -306,36 +306,37 @@ void UPropertyRenderer::CacheResources()
 		CachedStaticMeshItems.Insert("None", 0);
 	}
 
-	// 1.5 스켈레탈 메시
+    // 1.5 스켈레탈 메시 (항상 파일 시스템도 병합 스캔하여 신규 파일 반영)
     if (CachedSkeletalMeshPaths.IsEmpty() && CachedSkeletalMeshItems.IsEmpty())
     {
-        // 1) 이미 로드된 스켈레탈 메시 경로 수집
         CachedSkeletalMeshPaths = ResMgr.GetAllFilePaths<USkeletalMesh>();
         for (const FString& path : CachedSkeletalMeshPaths)
-        {
             CachedSkeletalMeshItems.push_back(path.c_str());
-        }
-        // 2) 없으면 파일 시스템에서 .fbx 스캔 (GDataDir)
-        if (CachedSkeletalMeshPaths.IsEmpty())
+
+        // None 항목을 맨 앞에 삽입 (초기 1회)
+        CachedSkeletalMeshPaths.Insert("", 0);
+        CachedSkeletalMeshItems.Insert("None", 0);
+    }
+    // 파일 시스템 스캔으로 신규 .fbx 병합
+    {
+        const FString Root = GDataDir;
+        if (fs::exists(Root) && fs::is_directory(Root))
         {
-            const FString Root = GDataDir;
-            if (fs::exists(Root) && fs::is_directory(Root))
+            for (const auto& Entry : fs::recursive_directory_iterator(Root))
             {
-                for (const auto& Entry : fs::recursive_directory_iterator(Root))
+                if (!Entry.is_regular_file()) continue;
+                if (Entry.path().extension() != ".fbx") continue;
+                FString Path = NormalizePath(WideToUTF8(Entry.path().generic_wstring()));
+                bool bExists = false;
+                for (const FString& P : CachedSkeletalMeshPaths)
+                    if (P == Path) { bExists = true; break; }
+                if (!bExists)
                 {
-                    if (Entry.is_regular_file() && Entry.path().extension() == ".fbx")
-                    {
-                        FString Path = WideToUTF8(Entry.path().generic_wstring());
-                        FString N = NormalizePath(Path);
-                        CachedSkeletalMeshPaths.Add(N);
-                        CachedSkeletalMeshItems.Add(CachedSkeletalMeshPaths.back().c_str());
-                    }
+                    CachedSkeletalMeshPaths.Add(Path);
+                    CachedSkeletalMeshItems.Add(CachedSkeletalMeshPaths.back().c_str());
                 }
             }
         }
-        // 3) None 항목 추가를 맨 앞에
-        CachedSkeletalMeshPaths.Insert("", 0);
-        CachedSkeletalMeshItems.Insert("None", 0);
     }
 
 	// 2. 머티리얼
