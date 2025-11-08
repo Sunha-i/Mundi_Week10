@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "FBXImporter.h"
 #include "GlobalConsole.h"
 
@@ -120,8 +120,8 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
 
     // 좌표축/단위계를 엔진 표준으로 변환 (DirectX 좌표, 미터)
     {
-        const FbxAxisSystem desiredAxis = FbxAxisSystem::DirectX; // Left-handed, +Y up
-        desiredAxis.ConvertScene(mScene);
+        //const FbxAxisSystem desiredAxis = FbxAxisSystem::DirectX; // Left-handed, +Y up
+        //desiredAxis.ConvertScene(mScene);
 
         const FbxSystemUnit desiredUnit = FbxSystemUnit::m; // meters
         if (mScene->GetGlobalSettings().GetSystemUnit() != desiredUnit)
@@ -408,7 +408,11 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
             }
             // Position (컨트롤 포인트 위치는 cp에 보관)
             const FbxVector4& P = ControlPoints[ControlPointIndex];
-            SkinnedVertices[ControlPointIndex].pos = FVector((float)P[0] * unitToMeters, (float)P[1] * unitToMeters, (float)P[2] * unitToMeters);
+            // Convert to engine space: match OBJ pipeline (invert Y)
+            SkinnedVertices[ControlPointIndex].pos = FVector(
+                (float)P[0] * unitToMeters,
+                (float)(P[1]) * unitToMeters * -1,
+                (float)P[2] * unitToMeters);
 
             // Corner Normal
             FVector NormalOut;
@@ -418,7 +422,7 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
                 {
                     const double len = N.Length();
                     if (len > 1e-6) { N[0] /= len; N[1] /= len; N[2] /= len; }
-                    NormalOut = FVector((float)N[0], (float)N[1], (float)N[2]);
+                    NormalOut = FVector((float)N[0], (float)(-N[1]), (float)N[2]);
                 }
                 else
                 {
@@ -433,7 +437,11 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
                 FbxVector2 UV(0.0, 0.0);
                 bool bUnmapped = false;
                 if (Mesh->GetPolygonVertexUV(PolyIndex, Corner, UvSetName, UV, bUnmapped))
-                    UVOut = FVector2D((float)UV[0], (float)UV[1]);
+                {
+                    float u = static_cast<float>(UV[0]);
+                    float v = static_cast<float>(UV[1]);
+                    UVOut = FVector2D(u, 1.0f - v);
+                }
             }
 
             // Store per-corner data

@@ -8,6 +8,7 @@
 #include "Texture.h"
 #include "SkeletalMesh.h"
 #include "StaticMesh.h"
+#include "SkeletalMeshComponent.h"
 #include "Material.h"
 #include "SkinnedMeshComponent.h"
 #include "BillboardComponent.h"
@@ -306,16 +307,36 @@ void UPropertyRenderer::CacheResources()
 	}
 
 	// 1.5 스켈레탈 메시
-	if (CachedSkeletalMeshPaths.IsEmpty() && CachedSkeletalMeshItems.IsEmpty())
-	{
-		CachedSkeletalMeshPaths = ResMgr.GetAllFilePaths<USkeletalMesh>();
-		for (const FString& path : CachedSkeletalMeshPaths)
-		{
-			CachedSkeletalMeshItems.push_back(path.c_str());
-		}
-		CachedSkeletalMeshPaths.Insert("", 0);
-		CachedSkeletalMeshItems.Insert("None", 0);
-	}
+    if (CachedSkeletalMeshPaths.IsEmpty() && CachedSkeletalMeshItems.IsEmpty())
+    {
+        // 1) 이미 로드된 스켈레탈 메시 경로 수집
+        CachedSkeletalMeshPaths = ResMgr.GetAllFilePaths<USkeletalMesh>();
+        for (const FString& path : CachedSkeletalMeshPaths)
+        {
+            CachedSkeletalMeshItems.push_back(path.c_str());
+        }
+        // 2) 없으면 파일 시스템에서 .fbx 스캔 (GDataDir)
+        if (CachedSkeletalMeshPaths.IsEmpty())
+        {
+            const FString Root = GDataDir;
+            if (fs::exists(Root) && fs::is_directory(Root))
+            {
+                for (const auto& Entry : fs::recursive_directory_iterator(Root))
+                {
+                    if (Entry.is_regular_file() && Entry.path().extension() == ".fbx")
+                    {
+                        FString Path = WideToUTF8(Entry.path().generic_wstring());
+                        FString N = NormalizePath(Path);
+                        CachedSkeletalMeshPaths.Add(N);
+                        CachedSkeletalMeshItems.Add(CachedSkeletalMeshPaths.back().c_str());
+                    }
+                }
+            }
+        }
+        // 3) None 항목 추가를 맨 앞에
+        CachedSkeletalMeshPaths.Insert("", 0);
+        CachedSkeletalMeshItems.Insert("None", 0);
+    }
 
 	// 2. 머티리얼
 	if (CachedMaterialPaths.IsEmpty() && CachedTexturePaths.IsEmpty())
@@ -1250,10 +1271,10 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		CurrentMaterial = *MaterialPtr; // 콤보박스에서 변경되었을 수 있으므로 업데이트
 	}
 
-	// --- 2. UMaterialInterface 내부 프로퍼티 렌더링 ---
-	if (CurrentMaterial)
-	{
-		ImGui::Indent();
+    // --- 2. UMaterialInterface 내부 프로퍼티 렌더링 ---
+    if (CurrentMaterial)
+    {
+        ImGui::Indent();
 
 		// --- 2-1. 셰이더 (읽기 전용) ---
 		UShader* CurrentShader = CurrentMaterial->GetShader();
@@ -1276,15 +1297,15 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		ImGui::InputText(ShaderMacroKeyLabel.c_str(), ShaderMacroBuffer, sizeof(ShaderMacroBuffer), ImGuiInputTextFlags_ReadOnly);
 		ImGui::EndDisabled();
 
-		// --- 2-2. 텍스처 슬롯 ---
-		// ImGui 위젯 값이 변경될 때만 호출됩니다.
-		UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(OwningObject);
-
-		if (!StaticMeshComp)
-		{
-			ImGui::Text("UStaticMeshComponent 만 텍스처를 변경할 수 있습니다");
-			return false;
-		}
+        // --- 2-2. 텍스처 슬롯 ---
+        // ImGui 위젯 값이 변경될 때만 호출됩니다.
+        UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(OwningObject);
+        USkeletalMeshComponent* SkeletalMeshComp = Cast<USkeletalMeshComponent>(OwningObject);
+        if (!StaticMeshComp && !SkeletalMeshComp)
+        {
+            ImGui::Text("지원되지 않는 컴포넌트 타입입니다 (Static/Skeletal 만 지원)");
+            return false;
+        }
 
 		for (uint8 TexSlotIndex = 0; TexSlotIndex < (uint8)EMaterialTextureSlot::Max; ++TexSlotIndex)
 		{
@@ -1300,11 +1321,14 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 			FString TextureLabel = FString(SlotName) + "##" + Label;
 
 			UTexture* NewTexture = nullptr;
-			if (RenderTextureSelectionCombo(TextureLabel.c_str(), CurrentTexture, NewTexture))
-			{
-				StaticMeshComp->SetMaterialTextureByUser(MaterialIndex, Slot, NewTexture);
-				bElementChanged = true;
-			}
+            if (RenderTextureSelectionCombo(TextureLabel.c_str(), CurrentTexture, NewTexture))
+            {
+                if (StaticMeshComp)
+                    StaticMeshComp->SetMaterialTextureByUser(MaterialIndex, Slot, NewTexture);
+                else if (SkeletalMeshComp)
+                    SkeletalMeshComp->SetMaterialTextureByUser(MaterialIndex, Slot, NewTexture);
+                bElementChanged = true;
+            }
 		}
 
 		// --- 2-3. FMaterialInfo 파라미터 (스칼라 및 벡터) ---
@@ -1323,45 +1347,50 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString DiffuseLabel = "Diffuse Color##" + FString(Label);
 		if (ImGui::ColorEdit3(DiffuseLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "DiffuseColor", TempColor);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "DiffuseColor", TempColor);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialColorByUser(MaterialIndex, "DiffuseColor", TempColor);
+            bElementChanged = true;
+        }
 
 		// AmbientColor
 		TempColor = FLinearColor(Info.AmbientColor);
 		FString AmbientLabel = "Ambient Color##" + FString(Label);
 		if (ImGui::ColorEdit3(AmbientLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "AmbientColor", TempColor);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "AmbientColor", TempColor);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialColorByUser(MaterialIndex, "AmbientColor", TempColor);
+            bElementChanged = true;
+        }
 
 		// SpecularColor
 		TempColor = FLinearColor(Info.SpecularColor);
 		FString SpecularLabel = "Specular Color##" + FString(Label);
 		if (ImGui::ColorEdit3(SpecularLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "SpecularColor", TempColor);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "SpecularColor", TempColor);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialColorByUser(MaterialIndex, "SpecularColor", TempColor);
+            bElementChanged = true;
+        }
 
 		// EmissiveColor
 		TempColor = FLinearColor(Info.EmissiveColor);
 		FString EmissiveLabel = "Emissive Color##" + FString(Label);
 		if (ImGui::ColorEdit3(EmissiveLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "EmissiveColor", TempColor);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "EmissiveColor", TempColor);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialColorByUser(MaterialIndex, "EmissiveColor", TempColor);
+            bElementChanged = true;
+        }
 
 		// TransmissionFilter
 		TempColor = FLinearColor(Info.TransmissionFilter);
 		FString TransmissionLabel = "Transmission Filter##" + FString(Label);
 		if (ImGui::ColorEdit3(TransmissionLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "TransmissionFilter", TempColor);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "TransmissionFilter", TempColor);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialColorByUser(MaterialIndex, "TransmissionFilter", TempColor);
+            bElementChanged = true;
+        }
 
 		// --- Floats (float -> ImGui::DragFloat) ---
 		float TempFloat; // ImGui 위젯에 바인딩할 임시 변수
@@ -1371,45 +1400,50 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString SpecExpLabel = "Specular Exponent##" + FString(Label);
 		if (ImGui::DragFloat(SpecExpLabel.c_str(), &TempFloat, 1.0f, 0.0f, 1024.0f))
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "SpecularExponent", TempFloat);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "SpecularExponent", TempFloat);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialScalarByUser(MaterialIndex, "SpecularExponent", TempFloat);
+            bElementChanged = true;
+        }
 
 		// Transparency (d or Tr)
 		TempFloat = Info.Transparency;
 		FString TransparencyLabel = "Transparency##" + FString(Label);
 		if (ImGui::DragFloat(TransparencyLabel.c_str(), &TempFloat, 0.01f, 0.0f, 1.0f))
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "Transparency", TempFloat);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "Transparency", TempFloat);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialScalarByUser(MaterialIndex, "Transparency", TempFloat);
+            bElementChanged = true;
+        }
 
 		// OpticalDensity (Ni)
 		TempFloat = Info.OpticalDensity;
 		FString OpticalDensityLabel = "Optical Density##" + FString(Label);
 		if (ImGui::DragFloat(OpticalDensityLabel.c_str(), &TempFloat, 0.01f, 0.0f, 10.0f)) // 범위는 임의로 지정
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "OpticalDensity", TempFloat);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "OpticalDensity", TempFloat);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialScalarByUser(MaterialIndex, "OpticalDensity", TempFloat);
+            bElementChanged = true;
+        }
 
 		// BumpMultiplier (bm)
 		TempFloat = Info.BumpMultiplier;
 		FString BumpMultiplierLabel = "Bump Multiplier##" + FString(Label);
 		if (ImGui::DragFloat(BumpMultiplierLabel.c_str(), &TempFloat, 0.01f, 0.0f, 5.0f)) // 범위는 임의로 지정
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "BumpMultiplier", TempFloat);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "BumpMultiplier", TempFloat);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialScalarByUser(MaterialIndex, "BumpMultiplier", TempFloat);
+            bElementChanged = true;
+        }
 
 		// --- Ints (IlluminationModel) ---
 		int TempInt = Info.IlluminationModel;
 		FString IllumModelLabel = "Illum Model##" + FString(Label);
 		if (ImGui::DragInt(IllumModelLabel.c_str(), &TempInt, 1, 0, 10)) // 0-10은 OBJ 표준 범위
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "IlluminationModel", (float)TempInt);
-			bElementChanged = true;
-		}
+            if (StaticMeshComp) StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "IlluminationModel", (float)TempInt);
+            else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialScalarByUser(MaterialIndex, "IlluminationModel", (float)TempInt);
+            bElementChanged = true;
+        }
 
 		ImGui::Unindent();
 	}

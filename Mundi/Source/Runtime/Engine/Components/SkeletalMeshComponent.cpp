@@ -4,6 +4,7 @@
 #include "SkeletalMesh.h"
 #include "ResourceManager.h"
 #include "Material.h"
+#include "Texture.h"
 #include "Shader.h"
 #include "SceneView.h"
 #include "MeshBatchElement.h"
@@ -23,7 +24,15 @@ USkeletalMeshComponent::USkeletalMeshComponent()
     SetSkeletalMesh(GDataDir + "/Model/Ch46_nonPBR.fbx");
 }
 
-USkeletalMeshComponent::~USkeletalMeshComponent() = default;
+USkeletalMeshComponent::~USkeletalMeshComponent()
+{
+    for (UMaterialInstanceDynamic* MID : DynamicMaterialInstances)
+    {
+        delete MID;
+    }
+    DynamicMaterialInstances.Empty();
+    MaterialSlots.Empty();
+}
 
 void USkeletalMeshComponent::CollectMeshBatches(TArray<FMeshBatchElement>& OutMeshBatchElements, const FSceneView* View)
 {
@@ -140,5 +149,73 @@ void USkeletalMeshComponent::SetMaterial(uint32 InElementIndex, UMaterialInterfa
             return;
         }
     }
+
+    // If replacing an existing MID we own, delete it
+    if (UMaterialInterface* OldMaterial = MaterialSlots[(int32)InElementIndex])
+    {
+        if (UMaterialInstanceDynamic* OldMID = Cast<UMaterialInstanceDynamic>(OldMaterial))
+        {
+            int32 Removed = DynamicMaterialInstances.Remove(OldMID);
+            if (Removed > 0)
+                delete OldMID;
+        }
+    }
+
     MaterialSlots[(int32)InElementIndex] = InNewMaterial;
+}
+
+UMaterialInstanceDynamic* USkeletalMeshComponent::CreateAndSetMaterialInstanceDynamic(uint32 ElementIndex)
+{
+    UMaterialInterface* CurrentMaterial = GetMaterial(ElementIndex);
+    if (!CurrentMaterial)
+        return nullptr;
+
+    if (UMaterialInstanceDynamic* ExistingMID = Cast<UMaterialInstanceDynamic>(CurrentMaterial))
+        return ExistingMID;
+
+    UMaterialInstanceDynamic* NewMID = UMaterialInstanceDynamic::Create(CurrentMaterial);
+    if (NewMID)
+    {
+        DynamicMaterialInstances.Add(NewMID);
+        SetMaterial(ElementIndex, NewMID);
+        NewMID->SetFilePath("(Instance) " + CurrentMaterial->GetFilePath());
+        return NewMID;
+    }
+    return nullptr;
+}
+
+void USkeletalMeshComponent::SetMaterialTextureByUser(const uint32 InMaterialSlotIndex, EMaterialTextureSlot Slot, UTexture* Texture)
+{
+    UMaterialInterface* CurrentMaterial = GetMaterial(InMaterialSlotIndex);
+    UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(CurrentMaterial);
+    if (MID == nullptr)
+    {
+        MID = CreateAndSetMaterialInstanceDynamic(InMaterialSlotIndex);
+    }
+    if (MID)
+        MID->SetTextureParameterValue(Slot, Texture);
+}
+
+void USkeletalMeshComponent::SetMaterialColorByUser(const uint32 InMaterialSlotIndex, const FString& ParameterName, const FLinearColor& Value)
+{
+    UMaterialInterface* CurrentMaterial = GetMaterial(InMaterialSlotIndex);
+    UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(CurrentMaterial);
+    if (MID == nullptr)
+    {
+        MID = CreateAndSetMaterialInstanceDynamic(InMaterialSlotIndex);
+    }
+    if (MID)
+        MID->SetColorParameterValue(ParameterName, Value);
+}
+
+void USkeletalMeshComponent::SetMaterialScalarByUser(const uint32 InMaterialSlotIndex, const FString& ParameterName, float Value)
+{
+    UMaterialInterface* CurrentMaterial = GetMaterial(InMaterialSlotIndex);
+    UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(CurrentMaterial);
+    if (MID == nullptr)
+    {
+        MID = CreateAndSetMaterialInstanceDynamic(InMaterialSlotIndex);
+    }
+    if (MID)
+        MID->SetScalarParameterValue(ParameterName, Value);
 }
