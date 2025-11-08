@@ -1,5 +1,13 @@
 ﻿#pragma once
-class USkeletalMeshComponent
-{
-};
 
+#include "SkinnedMeshComponent.h"
+
+class USkeletalMeshComponent : public USkinnedMeshComponent
+{
+public:
+    DECLARE_CLASS(USkeletalMeshComponent, USkinnedMeshComponent)
+    USkeletalMeshComponent();
+    ~USkeletalMeshComponent();
+protected:
+
+};
