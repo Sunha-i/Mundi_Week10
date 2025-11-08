@@ -1,5 +1,5 @@
 ﻿#include "pch.h"
-#include "FBXImporter.h"
+#include "FbxManager.h"
 
 static inline FMatrix FbxAMatrixToFMatrix(const FbxAMatrix& A)
 {

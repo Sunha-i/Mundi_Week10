@@ -515,9 +515,6 @@
     <ClCompile Include="Source\Runtime\Engine\Scripting\LuaComponentProxy.cpp">
       <Filter>Source\Runtime\Engine\Scripting</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Editor\FBXImporter.cpp">
-      <Filter>Source\Editor</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Runtime\Engine\Components\SkeletalMeshComponent.cpp">
       <Filter>Source\Runtime\Engine\Components</Filter>
     </ClCompile>
@@ -526,6 +523,9 @@
     </ClCompile>
     <ClCompile Include="Source\Runtime\AssetManagement\SkeletalMesh.cpp">
       <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\FbxManager.cpp">
+      <Filter>Source\Editor</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1130,9 +1130,6 @@
     <ClInclude Include="Source\Runtime\Engine\Scripting\LuaComponentProxy.h">
       <Filter>Source\Runtime\Engine\Scripting</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Editor\FBXImporter.h">
-      <Filter>Source\Editor</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Runtime\Engine\Components\SkeletalMeshComponent.h">
       <Filter>Source\Runtime\Engine\Components</Filter>
     </ClInclude>
@@ -1141,6 +1138,9 @@
     </ClInclude>
     <ClInclude Include="Source\Runtime\AssetManagement\SkeletalMesh.h">
       <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\FbxManager.h">
+      <Filter>Source\Editor</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
