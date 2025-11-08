@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <fbxsdk.h>
 #include "UEContainer.h"
 #include "Vector.h"
@@ -61,8 +61,10 @@ private:
 
     // 첫 번째 UVSet 이름 반환 (없으면 nullptr)
     static const char* GetFirstUVSetName(FbxMesh* Mesh);
+    static const char* SelectBestUVSetName(FbxMesh* Mesh);
 
 private:
     FbxManager* mManager = nullptr;  // FBX SDK Manager
     FbxScene* mScene = nullptr;  // FBX Scene 객체
 };
+

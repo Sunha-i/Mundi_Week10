@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "FBXManager.h"
 
 #include "FBXImporter.h"
@@ -80,7 +80,7 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	// [0] 캐시 파일 경로 계산 및 디렉토리 준비
 	// ────────────────────────────────────────────────
 	FString CacheBase = ConvertDataPathToCachePath(NormalizedPath);
-	const FString BinPath = CacheBase + ".skel.v3.bin";
+    const FString BinPath = CacheBase + ".skel.v4.bin";
 
 	fs::path BinFs(BinPath);
 	if (BinFs.has_parent_path())
@@ -114,20 +114,22 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 		}
 	}
 
-	// ────────────────────────────────────────────────
-	// [2] 캐시가 없거나 실패했으면 FBX 재파싱
-	// ────────────────────────────────────────────────
-	FFBXImporter Importer;
-	if (!Importer.LoadFBX(NormalizedPath))
-	{
+    // ────────────────────────────────────────────────
+    // [2] 캐시가 없거나 실패했으면 FBX 재파싱
+    // ────────────────────────────────────────────────
+    FFBXImporter Importer;
+    if (!Importer.LoadFBX(NormalizedPath))
+    {
+        UE_LOG("[FBXManager] Failed to load FBX '%s'", NormalizedPath.c_str());
+        return nullptr;
+    }
+
+    // Write raw (importer) UV debug dump on successful parse
     {
         std::string DumpPath = (CacheBase + ".uvdump.txt");
         Importer.WriteDebugDump(DumpPath);
         UE_LOG("[FBXManager] Wrote UV debug dump: %s", DumpPath.c_str());
     }
-		UE_LOG("[FBXManager] Failed to load FBX '%s'", NormalizedPath.c_str());
-		return nullptr;
-	}
 
 	auto* NewAsset = new FSkeletalMesh();
 	NewAsset->PathFileName = NormalizedPath;
