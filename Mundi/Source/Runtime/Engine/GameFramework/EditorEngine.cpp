@@ -268,6 +268,8 @@ void UEditorEngine::HandleUVInput(float DeltaSeconds)
 
 }
 
+#include "FbxManager.h"
+
 void UEditorEngine::MainLoop()
 {
     LARGE_INTEGER Frequency;
@@ -277,6 +279,8 @@ void UEditorEngine::MainLoop()
     QueryPerformanceCounter(&PrevTime);
 
     MSG msg;
+
+    FFbxManager::GetInstance();
 
     while (bRunning)
     {

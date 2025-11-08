@@ -1231,6 +1231,15 @@ struct FTransform
 		return Result;
 	}
 
+	FMatrix GetModelingMatrix()
+	{
+		FMatrix T = FMatrix::MakeTranslation(Translation);
+		FMatrix R = Rotation.ToMatrix();
+		FMatrix S = FMatrix::MakeScale(Scale3D);
+
+		return S * R * T;
+	}
+
 	// 역변환
 	FTransform Inverse() const;
 

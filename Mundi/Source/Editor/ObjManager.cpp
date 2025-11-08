@@ -541,7 +541,7 @@ UStaticMesh* FObjManager::LoadObjStaticMesh(const FString& PathFileName)
 	// 2) 없으면 새로 로드 (정규화된 경로 사용)
 	UStaticMesh* StaticMesh = UResourceManager::GetInstance().Load<UStaticMesh>(NormalizedPathStr);
 
-	UE_LOG("UStaticMesh(filename: \'%s\') is successfully crated!", NormalizedPathStr.c_str());
+	UE_LOG("UStaticMesh(filename: \'%s\') is successfully created!", NormalizedPathStr.c_str());
 	return StaticMesh;
 }
 

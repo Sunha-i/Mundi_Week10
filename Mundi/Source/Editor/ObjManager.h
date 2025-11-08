@@ -1,10 +1,6 @@
 ﻿#pragma once
 
 #include <string>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <unordered_map>
 
 #include "UEContainer.h"
 #include "Vector.h"
