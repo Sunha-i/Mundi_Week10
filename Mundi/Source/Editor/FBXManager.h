@@ -3,7 +3,12 @@
 #include "UEContainer.h"
 
 struct FSkeletalMesh;
-
+//static inline int QuantizeFloat(float v) { return (int)std::round(v * 10000.0f); }
+//static inline uint8 QuantizeWeight(float w)
+//{
+//    float cl = std::max(0.0f, std::min(1.0f, w));
+//    return (uint8)std::round(cl * 255.0f);
+//}
 struct VKey {
     uint32 cp; int nx, ny, nz; int ux, uy; uint8 bi[4]; uint8 bw[4];
     bool operator==(const VKey& o) const {
