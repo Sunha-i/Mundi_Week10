@@ -4,13 +4,27 @@
 #include "Vector.h"
 #include "Enums.h"
 
+
+// ============================================================================
+// [Helper] FBX 정규화 함수
+// ============================================================================
+static int QuantizeFloat(float Value)
+{
+    return static_cast<int>(std::round(Value * 10000.0f));
+}
+
+static uint8 QuantizeWeight(float Weight)
+{
+    float Clamped = std::clamp(Weight, 0.0f, 1.0f);
+    return static_cast<uint8>(std::round(Clamped * 255.0f));
+}
+
 // ============================================================================
 // FFBXImporter
 // ----------------------------------------------------------------------------
 //  FBX 파일을 불러와서 정점(Position, Normal, UV)을 추출하는 Static Mesh Importer
 //  FBX SDK를 이용해 FBX Scene을 순회하고 Mesh 데이터를 변환한다.
 // ============================================================================
-
 class FFBXImporter
 {
 public:
@@ -28,7 +42,11 @@ public:
 public:
     TArray<FSkinnedVertex> SkinnedVertices;
     TArray<Bone> Bones;
-    TArray<uint32> TriangleIndices;
+    // Corner-level raw data (for proper cooking)
+    TArray<uint32> CornerControlPointIndices; // per corner: control point index
+    TArray<FVector> CornerNormals;            // per corner normal
+    TArray<FVector2D> CornerUVs;              // per corner uv
+    TArray<uint32> TriangleCornerIndices;     // triangles as indices into corner arrays
 
     void ProcessSkin(FbxMesh* Mesh);
 

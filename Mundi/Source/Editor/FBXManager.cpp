@@ -7,6 +7,9 @@
 #include "WindowsBinReader.h"
 #include "WindowsBinWriter.h"
 #include <filesystem>
+#include <unordered_map>
+#include <algorithm>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
@@ -53,7 +56,7 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 
 	// 캐시 파일 경로 계산
 	FString CacheBase = ConvertDataPathToCachePath(NormalizedPath);
-	const FString BinPath = CacheBase + ".skel.bin";
+	const FString BinPath = CacheBase + ".skel.v2.bin";
 
 	// 캐시 디렉토리 존재 보장
 	fs::path BinFs(BinPath);
@@ -71,7 +74,7 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	if (!bShouldRegen)
 	{
 		FWindowsBinReader Reader(BinPath);
-		if (Reader.IsOpen()) // ← 예외 대신 단순한 스트림 상태 체크
+		if (Reader.IsOpen())
 		{
 			auto* NewAsset = new FSkeletalMesh();
 			Reader << *NewAsset;
@@ -99,9 +102,82 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 
 	auto* NewAsset = new FSkeletalMesh();
 	NewAsset->PathFileName = NormalizedPath;
-	NewAsset->Vertices = Importer.SkinnedVertices;
-	NewAsset->Indices = Importer.TriangleIndices;
 	NewAsset->Bones = Importer.Bones;
+
+	// ────────────────────────────────────────────────
+	// [2-1] Corner 기반 Vertex 생성 및 Deduplication
+	// ────────────────────────────────────────────────
+
+	// 부동소수점 → 정수 변환 (정규화) 함수
+	//auto QuantizeFloat = [](float Value) -> int
+	//	{
+	//		return static_cast<int>(std::round(Value * 10000.0f));
+	//	};
+
+	//// Bone Weight(0~1)를 0~255 범위로 정규화
+	//auto QuantizeWeight = [](float Weight) -> uint8
+	//	{
+	//		float Clamped = std::clamp(Weight, 0.0f, 1.0f);
+	//		return static_cast<uint8>(std::round(Clamped * 255.0f));
+	//	};
+
+	std::unordered_map<VKey, uint32, VKeyHash> VertexLUT;
+
+	const auto& CornerControlPointIndices = Importer.CornerControlPointIndices;
+	const auto& CornerNormals = Importer.CornerNormals;
+	const auto& CornerUVs = Importer.CornerUVs;
+	const auto& TriangleCornerIndices = Importer.TriangleCornerIndices;
+
+	NewAsset->Vertices.reserve(CornerControlPointIndices.size());
+	NewAsset->Indices.reserve(TriangleCornerIndices.size());
+
+	for (size_t CornerIndex = 0; CornerIndex < TriangleCornerIndices.size(); ++CornerIndex)
+	{
+		uint32 CornerID = TriangleCornerIndices[CornerIndex];
+		uint32 ControlPointID = CornerControlPointIndices[CornerID];
+		const FVector& Normal = CornerNormals[CornerID];
+		const FVector2D& UV = CornerUVs[CornerID];
+		const FSkinnedVertex& ControlPointVertex = Importer.SkinnedVertices[ControlPointID];
+
+		VKey Key{};
+		Key.cp = ControlPointID;
+		Key.nx = QuantizeFloat(Normal.X);
+		Key.ny = QuantizeFloat(Normal.Y);
+		Key.nz = QuantizeFloat(Normal.Z);
+		Key.ux = QuantizeFloat(UV.X);
+		Key.uy = QuantizeFloat(UV.Y);
+
+		for (int i = 0; i < 4; ++i)
+		{
+			Key.bi[i] = static_cast<uint8>(ControlPointVertex.boneIndices[i]);
+			Key.bw[i] = QuantizeWeight(ControlPointVertex.boneWeights[i]);
+		}
+
+		// 중복 정점 검색
+		auto It = VertexLUT.find(Key);
+		uint32 VertexIndex = 0;
+
+		if (It == VertexLUT.end())
+		{
+            FSkinnedVertex Vertex{};
+            Vertex.pos = ControlPointVertex.pos;
+            Vertex.normal = Normal;
+            Vertex.uv = UV;
+			// 4 개 원소 복사 .
+            std::copy_n(ControlPointVertex.boneIndices, 4, Vertex.boneIndices);
+            std::copy_n(ControlPointVertex.boneWeights, 4, Vertex.boneWeights);
+
+			VertexIndex = static_cast<uint32>(NewAsset->Vertices.size());
+			NewAsset->Vertices.push_back(Vertex);
+			VertexLUT.emplace(Key, VertexIndex);
+		}
+		else
+		{
+			VertexIndex = It->second;
+		}
+
+		NewAsset->Indices.push_back(VertexIndex);
+	}
 
 	// ────────────────────────────────────────────────
 	// [3] 캐시 파일 저장 (예외 없이)
@@ -121,3 +197,5 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	FBXSkeletalAssetMap.Add(NormalizedPath, NewAsset);
 	return NewAsset;
 }
+
+

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FBXImporter.h"
 #include "GlobalConsole.h"
 
@@ -139,7 +139,10 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
     // 이전 결과 초기화
     SkinnedVertices.clear();
     Bones.clear();
-    TriangleIndices.clear();
+    CornerControlPointIndices.clear();
+    CornerNormals.clear();
+    CornerUVs.clear();
+    TriangleCornerIndices.clear();
 
     // Root Node부터 순회 시작
     if (FbxNode* Root = mScene->GetRootNode())
@@ -239,7 +242,7 @@ bool FFBXImporter::WriteDebugDump(const std::string& FilePath) const
         out << "  influences=";
         bool first = true;
         float sum = 0.0f;
-        for (int s = 0; s < 8; ++s)
+        for (int s = 0; s < 4; ++s)
         {
             if (v.boneWeights[s] > 0.0f)
             {
@@ -336,7 +339,7 @@ void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
         }
     }
 
-    // 사용한 슬롯만 정규화 + 나머지 0으로 정리
+    // 사용한 슬롯만 정규화
     for (int i = 0; i < (int)SkinnedVertices.size(); ++i)
     {
         FSkinnedVertex& V = SkinnedVertices[i];
@@ -348,7 +351,7 @@ void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
             const float Inv = 1.0f / Sum;
             for (int s = 0; s < Used; ++s) V.boneWeights[s] *= Inv;
         }
-        for (int s = Used; s < 8; ++s) { V.boneIndices[s] = 0; V.boneWeights[s] = 0.0f; }
+        // 4슬롯만 사용
     }
 
     UE_LOG("ProcessSkin 완료: Bones=%d, SkinnedVertices=%d", Bones.Num(), SkinnedVertices.Num());
@@ -389,12 +392,12 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
             unitToMeters = static_cast<float>(1.0 / scale);
     }
 
-    // 모든 폴리곤(삼각형)을 순회하며, 각 ControlPoint 인덱스에 위치/노멀/UV 기록 + 인덱스 생성
+    // 모든 폴리곤(삼각형)을 순회하며, 각 코너 단위로 속성 기록 + 코너 인덱스 기반 삼각형 생성
     for (int PolyIndex = 0; PolyIndex < PolygonCount; ++PolyIndex)
     {
         // 삼각형이면 PolySize 값은 3이다. 
         const int PolySize = Mesh->GetPolygonSize(PolyIndex);
-        int cp[4] = { -1, -1, -1, -1 };
+        int baseCorner = (int)CornerControlPointIndices.size();
         for (int Corner = 0; Corner < PolySize; ++Corner)
         {
             // 폴리곤 면이 참조하는 실제 정점 인덱스를 가져오는 핵심 코드
@@ -403,66 +406,53 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
             {
                 continue;
             }
-
-            if (Corner < 4) cp[Corner] = ControlPointIndex;
-
-            FSkinnedVertex& VertexData = SkinnedVertices[ControlPointIndex];
-
-            // Position
+            // Position (컨트롤 포인트 위치는 cp에 보관)
             const FbxVector4& P = ControlPoints[ControlPointIndex];
-            VertexData.pos = FVector((float)P[0] * unitToMeters, (float)P[1] * unitToMeters, (float)P[2] * unitToMeters);
+            SkinnedVertices[ControlPointIndex].pos = FVector((float)P[0] * unitToMeters, (float)P[1] * unitToMeters, (float)P[2] * unitToMeters);
 
-            // Normal (per-polygon vertex normal as a reasonable default)
-            FbxVector4 N(0, 0, 1, 0);
-            // 해당 위치에서의 노말값 가져오기 
-            if (Mesh->GetPolygonVertexNormal(PolyIndex, Corner, N))
+            // Corner Normal
+            FVector NormalOut;
             {
-                const double len = N.Length();
-                if (len > 1e-6)
+                FbxVector4 N(0, 0, 1, 0);
+                if (Mesh->GetPolygonVertexNormal(PolyIndex, Corner, N))
                 {
-                    N[0] /= len;
-                    N[1] /= len;
-                    N[2] /= len;
+                    const double len = N.Length();
+                    if (len > 1e-6) { N[0] /= len; N[1] /= len; N[2] /= len; }
+                    NormalOut = FVector((float)N[0], (float)N[1], (float)N[2]);
                 }
-                VertexData.normal = FVector((float)N[0], (float)N[1], (float)N[2]);
-            }
-            else
-            {
-                VertexData.normal = FVector(0, 0, 1);
+                else
+                {
+                    NormalOut = FVector(0, 0, 1);
+                }
             }
 
-            // UV (첫 번째 UVSet 사용)
+            // Corner UV
+            FVector2D UVOut(0.0f, 0.0f);
             if (bHasUV)
             {
                 FbxVector2 UV(0.0, 0.0);
                 bool bUnmapped = false;
                 if (Mesh->GetPolygonVertexUV(PolyIndex, Corner, UvSetName, UV, bUnmapped))
-                    VertexData.uv = FVector2D((float)UV[0], (float)UV[1]);
-                else
-                    VertexData.uv = FVector2D(0.0f, 0.0f);
-            }
-            else
-            {
-                VertexData.uv = FVector2D(0.0f, 0.0f);
+                    UVOut = FVector2D((float)UV[0], (float)UV[1]);
             }
 
-            // 스킨용 기본값 초기화 (나중에 ProcessSkin에서 덮어씀)
-            for (int slot = 0; slot < 8; ++slot)
-            {
-                VertexData.boneIndices[slot] = 0;
-                VertexData.boneWeights[slot] = 0.0f;
-            }
+            // Store per-corner data
+            CornerControlPointIndices.push_back((uint32)ControlPointIndex);
+            CornerNormals.push_back(NormalOut);
+            CornerUVs.push_back(UVOut);
         }
 
-        // Triangulate()를 통해 삼각형 보장되지만, 안전하게 PolySize 체크
-        if (PolySize == 3 && cp[0] >= 0 && cp[1] >= 0 && cp[2] >= 0)
+        // Triangulate() 보장. 코너 인덱스 기반으로 추가
+        if (PolySize == 3)
         {
-            TriangleIndices.push_back(static_cast<uint32>(cp[0]));
-            TriangleIndices.push_back(static_cast<uint32>(cp[1]));
-            TriangleIndices.push_back(static_cast<uint32>(cp[2]));
+            TriangleCornerIndices.push_back((uint32)baseCorner + 0);
+            TriangleCornerIndices.push_back((uint32)baseCorner + 1);
+            TriangleCornerIndices.push_back((uint32)baseCorner + 2);
         }
     }
 
-    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, SkinnedVerts=%d",
-        PolygonCount, ControlPointCount, (int)SkinnedVertices.size());
+    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, Corners=%d",
+        PolygonCount, ControlPointCount, (int)CornerControlPointIndices.size());
 }
+
+

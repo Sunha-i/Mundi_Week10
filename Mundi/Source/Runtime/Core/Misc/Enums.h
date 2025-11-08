@@ -124,16 +124,16 @@ struct FSkinnedVertex
     FVector pos;
     FVector normal;
     FVector2D uv;
-    int boneIndices[8];
-    float boneWeights[8];
+    int boneIndices[4];
+    float boneWeights[4];
 };
 inline FArchive& operator<<(FArchive& Ar, FSkinnedVertex& V)
 {
     Ar << V.pos;
     Ar << V.normal;
     Ar << V.uv;
-    Ar.Serialize(V.boneIndices, sizeof(int) * 8);
-    Ar.Serialize(V.boneWeights, sizeof(float) * 8);
+    Ar.Serialize(V.boneIndices, sizeof(int) * 4);
+    Ar.Serialize(V.boneWeights, sizeof(float) * 4);
     return Ar;
 }
 struct Vector3 
