@@ -48,7 +48,19 @@ public:
     void SetSkeletalMeshAsset(FSkeletalMesh* In) { SkeletalMeshAsset = In; }
     FSkeletalMesh* GetSkeletalMeshAsset() const { return SkeletalMeshAsset; }
 
+    // (미래) GPU 리소스 연동을 위한 접근자
+    ID3D11Buffer* GetVertexBuffer() const { return VertexBuffer; }
+    ID3D11Buffer* GetIndexBuffer() const { return IndexBuffer; }
+    uint32 GetVertexCount() const { return VertexCount; }
+    uint32 GetIndexCount() const { return IndexCount; }
+    FAABB GetLocalBound() const { return LocalBound; }
+
 private:
     FSkeletalMesh* SkeletalMeshAsset = nullptr;
+    ID3D11Buffer* VertexBuffer = nullptr;
+    ID3D11Buffer* IndexBuffer = nullptr;
+    uint32 VertexCount = 0;
+    uint32 IndexCount = 0;
+    FAABB LocalBound;
 };
 
