@@ -15,10 +15,8 @@ END_PROPERTIES()
 
 USkeletalMeshComponent::USkeletalMeshComponent()
 {
-    SetSkeletalMesh(GFbxDataDir + "/rogue_all.fbx");
-    //SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
-    //SetSkeletalMesh(GFbxDataDir + "/Juggernaut/MidPoly.fbx");
-    //SetSkeletalMesh(GFbxDataDir + "/Longinus/longinus_decimated.fbx");
+    //SetSkeletalMesh(GFbxDataDir + "/Rogue/rogue_all.fbx");
+    SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
 }
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
