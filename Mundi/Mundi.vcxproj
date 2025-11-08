@@ -207,6 +207,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Source\Editor\FBXImporter.cpp" />
     <ClCompile Include="Source\Editor\FBXManager.cpp" />
+    <ClCompile Include="Source\Runtime\AssetManagement\SkeletalMesh.cpp" />
     <ClCompile Include="Source\Runtime\Engine\Components\SkinnedMeshComponent.cpp" />
     <ClCompile Include="Source\Runtime\Engine\GameFramework\Camera\CamMod_Fade.cpp" />
     <FxCompile Include="Shaders\Materials\Fireball.hlsl">

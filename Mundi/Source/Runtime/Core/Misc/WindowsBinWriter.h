@@ -12,6 +12,10 @@ public:
         File.open(Filename, std::ios::binary | std::ios::out);
     }
     ~FWindowsBinWriter() { Close(); }
+    bool IsOpen() const
+    {
+        return File.is_open();
+    }
 
     void Serialize(void* Data, int64 Length) override
     {

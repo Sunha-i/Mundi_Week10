@@ -28,6 +28,7 @@ public:
 public:
     TArray<FSkinnedVertex> SkinnedVertices;
     TArray<Bone> Bones;
+    TArray<uint32> TriangleIndices;
 
     void ProcessSkin(FbxMesh* Mesh);
 

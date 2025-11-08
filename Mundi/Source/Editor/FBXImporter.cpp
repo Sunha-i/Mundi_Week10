@@ -139,6 +139,7 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
     // 이전 결과 초기화
     SkinnedVertices.clear();
     Bones.clear();
+    TriangleIndices.clear();
 
     // Root Node부터 순회 시작
     if (FbxNode* Root = mScene->GetRootNode())
@@ -388,11 +389,12 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
             unitToMeters = static_cast<float>(1.0 / scale);
     }
 
-    // 모든 폴리곤(삼각형)을 순회하며, 각 ControlPoint 인덱스에 위치/노멀/UV 기록
+    // 모든 폴리곤(삼각형)을 순회하며, 각 ControlPoint 인덱스에 위치/노멀/UV 기록 + 인덱스 생성
     for (int PolyIndex = 0; PolyIndex < PolygonCount; ++PolyIndex)
     {
         // 삼각형이면 PolySize 값은 3이다. 
         const int PolySize = Mesh->GetPolygonSize(PolyIndex);
+        int cp[4] = { -1, -1, -1, -1 };
         for (int Corner = 0; Corner < PolySize; ++Corner)
         {
             // 폴리곤 면이 참조하는 실제 정점 인덱스를 가져오는 핵심 코드
@@ -401,6 +403,8 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
             {
                 continue;
             }
+
+            if (Corner < 4) cp[Corner] = ControlPointIndex;
 
             FSkinnedVertex& VertexData = SkinnedVertices[ControlPointIndex];
 
@@ -448,6 +452,14 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
                 VertexData.boneIndices[slot] = 0;
                 VertexData.boneWeights[slot] = 0.0f;
             }
+        }
+
+        // Triangulate()를 통해 삼각형 보장되지만, 안전하게 PolySize 체크
+        if (PolySize == 3 && cp[0] >= 0 && cp[1] >= 0 && cp[2] >= 0)
+        {
+            TriangleIndices.push_back(static_cast<uint32>(cp[0]));
+            TriangleIndices.push_back(static_cast<uint32>(cp[1]));
+            TriangleIndices.push_back(static_cast<uint32>(cp[2]));
         }
     }
 

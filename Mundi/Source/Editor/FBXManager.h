@@ -1,20 +1,21 @@
-﻿#pragma once
+#pragma once
 
 #include "UEContainer.h"
 
-class USkeletalMesh;
+struct FSkeletalMesh;
 
 // FBX skeletal mesh manager: caches USkeletalMesh per path in memory
 class FFBXManager
 {
 private:
-    TMap<FString, USkeletalMesh*> FBXSkeletalMeshMap;
+    TMap<FString, FSkeletalMesh*> FBXSkeletalAssetMap;
 
 public:
     // Singleton accessor for convenience
     static FFBXManager& Get();
 
     void Clear();
-    USkeletalMesh* LoadFBXSkeletalMesh(const FString& PathFileName);
+    FSkeletalMesh* LoadFBXSkeletalMeshAsset(const FString& PathFileName);
 };
+
 

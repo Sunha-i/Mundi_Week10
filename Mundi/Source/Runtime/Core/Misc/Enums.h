@@ -1,4 +1,4 @@
-﻿//#ifndef UE_ENUMS_H
+//#ifndef UE_ENUMS_H
 //#define UE_ENUMS_H
 #pragma once
 #include "UEContainer.h"
@@ -127,6 +127,15 @@ struct FSkinnedVertex
     int boneIndices[8];
     float boneWeights[8];
 };
+inline FArchive& operator<<(FArchive& Ar, FSkinnedVertex& V)
+{
+    Ar << V.pos;
+    Ar << V.normal;
+    Ar << V.uv;
+    Ar.Serialize(V.boneIndices, sizeof(int) * 8);
+    Ar.Serialize(V.boneWeights, sizeof(float) * 8);
+    return Ar;
+}
 struct Vector3 
 {
     float x, y, z;
@@ -161,6 +170,17 @@ struct Bone
     Matrix4x4 BoneTransform;   // 현재 프레임에서의 본 월드 행렬
     Matrix4x4 SkinningMatrix;  // = BoneTransform * InverseBindPose
 };
+inline FArchive& operator<<(FArchive& Ar, Bone& B)
+{
+    if (Ar.IsSaving()) { Serialization::WriteString(Ar, B.Name); }
+    else if (Ar.IsLoading()) { Serialization::ReadString(Ar, B.Name); }
+    Ar << B.ParentIndex;
+    Ar.Serialize(&B.BindPose.m[0][0], sizeof(float) * 16);
+    Ar.Serialize(&B.InverseBindPose.m[0][0], sizeof(float) * 16);
+    Ar.Serialize(&B.BoneTransform.m[0][0], sizeof(float) * 16);
+    Ar.Serialize(&B.SkinningMatrix.m[0][0], sizeof(float) * 16);
+    return Ar;
+}
 
 
 //struct Bone 
@@ -335,6 +355,7 @@ enum class ResourceType : uint8
     None,
 
     StaticMesh,
+    SkeletalMesh,
     Quad,
     DynamicMesh,
     Shader,
@@ -540,4 +561,30 @@ enum class EWorldType : uint8
 };
 
 //#endif /** UE_ENUMS_H */
+
+
+namespace Serialization {
+    template<>
+    inline void WriteArray<FSkinnedVertex>(FArchive& Ar, const TArray<FSkinnedVertex>& Arr) {
+        uint32 Count = (uint32)Arr.size();
+        Ar << Count;
+        for (auto& V : Arr) Ar << const_cast<FSkinnedVertex&>(V);
+    }
+    template<>
+    inline void ReadArray<FSkinnedVertex>(FArchive& Ar, TArray<FSkinnedVertex>& Arr) {
+        uint32 Count; Ar << Count; Arr.resize(Count);
+        for (auto& V : Arr) Ar << V;
+    }
+    template<>
+    inline void WriteArray<Bone>(FArchive& Ar, const TArray<Bone>& Arr) {
+        uint32 Count = (uint32)Arr.size();
+        Ar << Count;
+        for (auto& B : Arr) Ar << const_cast<Bone&>(B);
+    }
+    template<>
+    inline void ReadArray<Bone>(FArchive& Ar, TArray<Bone>& Arr) {
+        uint32 Count; Ar << Count; Arr.resize(Count);
+        for (auto& B : Arr) Ar << B;
+    }
+}
 
