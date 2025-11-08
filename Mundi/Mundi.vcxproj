@@ -222,6 +222,9 @@
     </ClCompile>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Source\Editor\FBXImporter.cpp" />
+    <ClCompile Include="Source\Runtime\AssetManagement\SkeletalMesh.cpp" />
+    <ClCompile Include="Source\Runtime\Engine\Components\SkeletalMeshComponent.cpp" />
+    <ClCompile Include="Source\Runtime\Engine\Components\SkinnedMeshComponent.cpp" />
     <ClCompile Include="Source\Runtime\Engine\GameFramework\Camera\CamMod_Fade.cpp" />
     <FxCompile Include="Shaders\Materials\Fireball.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
@@ -558,6 +561,7 @@
     <ClInclude Include="Source\Editor\Clipboard\ClipboardManager.h" />
     <ClInclude Include="Source\Editor\FBXImporter.h" />
     <ClInclude Include="Source\Editor\PlatformProcess.h" />
+    <ClInclude Include="Source\Runtime\AssetManagement\SkeletalMesh.h" />
     <ClInclude Include="Source\Runtime\Core\Misc\Delegates.h" />
     <ClInclude Include="Source\Runtime\Core\Misc\Hash.h" />
     <ClInclude Include="Source\Runtime\Core\Misc\PathUtils.h" />
@@ -572,6 +576,8 @@
     <ClInclude Include="Source\Runtime\Engine\Components\RotatingMovementComponent.h" />
     <ClInclude Include="Source\Runtime\Engine\Components\BoxComponent.h" />
     <ClInclude Include="Source\Runtime\Engine\Components\ShapeComponent.h" />
+    <ClInclude Include="Source\Runtime\Engine\Components\SkeletalMeshComponent.h" />
+    <ClInclude Include="Source\Runtime\Engine\Components\SkinnedMeshComponent.h" />
     <ClInclude Include="Source\Runtime\Engine\Components\SphereComponent.h" />
     <ClInclude Include="Source\Runtime\Engine\GameFramework\AmbientLightActor.h" />
     <ClInclude Include="Source\Runtime\Engine\GameFramework\Camera\CamMod_LetterBox.h" />

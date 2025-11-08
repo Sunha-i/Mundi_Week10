@@ -5,6 +5,7 @@
 #include "Vector.h"
 
 class USkeletalMesh;
+class FSkeletalMesh;
 
 struct FFBXImportOptions
 {
@@ -49,4 +50,18 @@ public:
 private:
 	static void ParseSkeleton(FbxNode* Root, FFBXSkeletonData& OutSkeleton);
 	static void ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData);
+};
+
+class FFbxManager
+{
+public:
+	static void Preload();
+	static void Clear();
+	static FSkeletalMesh* LoadFbxSkeletalMeshAsset(const FString& PathFileName);
+	static USkeletalMesh* LoadFbxSkeletalMesh(const FString& PathFileName);
+
+private:
+	static TMap<FString, FSkeletalMesh*> CachedAssets;
+	static TMap<FString, USkeletalMesh*> CachedResources;
+	static bool IsSkeletalMesh(FbxMesh* Mesh);
 };

@@ -173,3 +173,19 @@ void FFBXImporter::ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData)
 		}
 	}
 }
+
+FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName)
+{
+	return nullptr;
+}
+
+USkeletalMesh* FFbxManager::LoadFbxSkeletalMesh(const FString& PathFileName)
+{
+	return nullptr;
+}
+
+bool FFbxManager::IsSkeletalMesh(FbxMesh* Mesh)
+{
+	const int DeformerCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
+	return (DeformerCount > 0);
+}
