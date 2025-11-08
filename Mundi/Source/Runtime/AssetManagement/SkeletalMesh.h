@@ -14,6 +14,9 @@ struct FSkeletalMesh
     TArray<FSkinnedVertex> Vertices;
     TArray<uint32> Indices;
     TArray<Bone> Bones;
+    // Sections (material groups) for multi-material support
+    TArray<FGroupInfo> Sections;
+    bool bHasMaterial = false;
 
     friend FArchive& operator<<(FArchive& Ar, FSkeletalMesh& Mesh)
     {
@@ -23,6 +26,11 @@ struct FSkeletalMesh
             Serialization::WriteArray(Ar, Mesh.Vertices);
             Serialization::WriteArray(Ar, Mesh.Indices);
             Serialization::WriteArray(Ar, Mesh.Bones);
+            // Write sections
+            uint32_t secCount = (uint32_t)Mesh.Sections.size();
+            Ar << secCount;
+            for (auto& s : Mesh.Sections) Ar << s;
+            Ar << Mesh.bHasMaterial;
         }
         else if (Ar.IsLoading())
         {
@@ -30,6 +38,12 @@ struct FSkeletalMesh
             Serialization::ReadArray(Ar, Mesh.Vertices);
             Serialization::ReadArray(Ar, Mesh.Indices);
             Serialization::ReadArray(Ar, Mesh.Bones);
+            // Read sections
+            uint32_t secCount = 0;
+            Ar << secCount;
+            Mesh.Sections.resize(secCount);
+            for (auto& s : Mesh.Sections) Ar << s;
+            Ar << Mesh.bHasMaterial;
         }
         return Ar;
     }

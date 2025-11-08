@@ -47,6 +47,7 @@ public:
     TArray<FVector> CornerNormals;            // per corner normal
     TArray<FVector2D> CornerUVs;              // per corner uv
     TArray<uint32> TriangleCornerIndices;     // triangles as indices into corner arrays
+    TArray<int> TriangleMaterialIndex;        // per triangle material slot index
 
     void ProcessSkin(FbxMesh* Mesh);
 

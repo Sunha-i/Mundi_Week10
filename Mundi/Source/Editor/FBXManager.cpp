@@ -27,6 +27,33 @@ static bool ShouldRegenerateCacheFBX(const FString& FBXPath, const FString& BinP
 	}
 }
 
+// Quantization helpers and vertex key for deduplication
+static inline int QuantizeFloat(float v) { return (int)std::round(v * 10000.0f); }
+static inline uint8 QuantizeWeight(float w)
+{
+    float cl = std::max(0.0f, std::min(1.0f, w));
+    return (uint8)std::round(cl * 255.0f);
+}
+struct VKey {
+    uint32 cp; 
+	int nx, ny, nz; 
+	int ux, uy; 
+	uint8 bi[4]; 
+	uint8 bw[4];
+    bool operator==(const VKey& o) const {
+        if (cp!=o.cp||nx!=o.nx||ny!=o.ny||nz!=o.nz||ux!=o.ux||uy!=o.uy) return false;
+        for(int i=0;i<4;++i){ if(bi[i]!=o.bi[i]||bw[i]!=o.bw[i]) return false; }
+        return true;
+    }
+};
+struct VKeyHash { size_t operator()(const VKey& k) const {
+    size_t h = k.cp;
+    auto mix=[&](size_t v){ h ^= v + 0x9e3779b97f4a7c15ull + (h<<6) + (h>>2); };
+    mix((size_t)k.nx); mix((size_t)k.ny); mix((size_t)k.nz); mix((size_t)k.ux); mix((size_t)k.uy);
+    for(int i=0;i<4;++i){ mix(k.bi[i]); mix(k.bw[i]); }
+    return h;
+} };
+
 FFBXManager& FFBXManager::Get()
 {
 	static FFBXManager Instance;
@@ -54,11 +81,12 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	if (FSkeletalMesh** Found = FBXSkeletalAssetMap.Find(NormalizedPath))
 		return *Found;
 
-	// 캐시 파일 경로 계산
+	// ────────────────────────────────────────────────
+	// [0] 캐시 파일 경로 계산 및 디렉토리 준비
+	// ────────────────────────────────────────────────
 	FString CacheBase = ConvertDataPathToCachePath(NormalizedPath);
 	const FString BinPath = CacheBase + ".skel.v2.bin";
 
-	// 캐시 디렉토리 존재 보장
 	fs::path BinFs(BinPath);
 	if (BinFs.has_parent_path())
 		fs::create_directories(BinFs.parent_path());
@@ -66,10 +94,11 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	// 캐시 최신 여부 판단
 	bool bShouldRegen = ShouldRegenerateCacheFBX(NormalizedPath, BinPath);
 	UE_LOG("[FBXManager] Cache check: src='%s' bin='%s' -> %s",
-		NormalizedPath.c_str(), BinPath.c_str(), bShouldRegen ? "REGENERATE" : "LOAD");
+		NormalizedPath.c_str(), BinPath.c_str(),
+		bShouldRegen ? "REGENERATE" : "LOAD");
 
 	// ────────────────────────────────────────────────
-	// [1] 캐시가 최신이면: 캐시에서 읽기
+	// [1] 캐시가 최신이면 캐시에서 로드
 	// ────────────────────────────────────────────────
 	if (!bShouldRegen)
 	{
@@ -105,82 +134,137 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	NewAsset->Bones = Importer.Bones;
 
 	// ────────────────────────────────────────────────
-	// [2-1] Corner 기반 Vertex 생성 및 Deduplication
+	// [2-1] Corner 기반 Vertex 생성 및 중복 제거 (Deduplication)
 	// ────────────────────────────────────────────────
-
-	// 부동소수점 → 정수 변환 (정규화) 함수
-	//auto QuantizeFloat = [](float Value) -> int
-	//	{
-	//		return static_cast<int>(std::round(Value * 10000.0f));
-	//	};
-
-	//// Bone Weight(0~1)를 0~255 범위로 정규화
-	//auto QuantizeWeight = [](float Weight) -> uint8
-	//	{
-	//		float Clamped = std::clamp(Weight, 0.0f, 1.0f);
-	//		return static_cast<uint8>(std::round(Clamped * 255.0f));
-	//	};
-
 	std::unordered_map<VKey, uint32, VKeyHash> VertexLUT;
 
 	const auto& CornerControlPointIndices = Importer.CornerControlPointIndices;
 	const auto& CornerNormals = Importer.CornerNormals;
 	const auto& CornerUVs = Importer.CornerUVs;
 	const auto& TriangleCornerIndices = Importer.TriangleCornerIndices;
+	const auto& TriangleMaterialIndices = Importer.TriangleMaterialIndex;
 
 	NewAsset->Vertices.reserve(CornerControlPointIndices.size());
-	NewAsset->Indices.reserve(TriangleCornerIndices.size());
 
-	for (size_t CornerIndex = 0; CornerIndex < TriangleCornerIndices.size(); ++CornerIndex)
+	// ────────────────────────────────────────────────
+	// [2-2] 머티리얼별 인덱스 버킷 초기화
+	// ────────────────────────────────────────────────
+	size_t TriangleCount = TriangleCornerIndices.size() / 3;
+
+	int MaxMaterialIndex = -1;
+	if (!TriangleMaterialIndices.empty())
 	{
-		uint32 CornerID = TriangleCornerIndices[CornerIndex];
-		uint32 ControlPointID = CornerControlPointIndices[CornerID];
-		const FVector& Normal = CornerNormals[CornerID];
-		const FVector2D& UV = CornerUVs[CornerID];
-		const FSkinnedVertex& ControlPointVertex = Importer.SkinnedVertices[ControlPointID];
+		for (int MaterialIndex : TriangleMaterialIndices)
+			if (MaterialIndex > MaxMaterialIndex)
+				MaxMaterialIndex = MaterialIndex;
+	}
 
-		VKey Key{};
-		Key.cp = ControlPointID;
-		Key.nx = QuantizeFloat(Normal.X);
-		Key.ny = QuantizeFloat(Normal.Y);
-		Key.nz = QuantizeFloat(Normal.Z);
-		Key.ux = QuantizeFloat(UV.X);
-		Key.uy = QuantizeFloat(UV.Y);
+	size_t BucketCount = (MaxMaterialIndex >= 0) ? static_cast<size_t>(MaxMaterialIndex + 1) : 1;
 
-		for (int i = 0; i < 4; ++i)
+	// 삼각형 마다, 어떤 머터리얼에 속하는지 정보가 존재한다. 
+	// 렌더링 최적화를 위해 머터리얼 별로 인덱스 그룹을 따로 둔다. 
+	TArray<TArray<uint32>> IndexBuckets(BucketCount);
+
+	// ────────────────────────────────────────────────
+	// [2-3] Corner → Vertex 변환 함수
+	// ────────────────────────────────────────────────
+	auto GetVertexIndex = [&](uint32 CornerID) -> uint32
 		{
-			Key.bi[i] = static_cast<uint8>(ControlPointVertex.boneIndices[i]);
-			Key.bw[i] = QuantizeWeight(ControlPointVertex.boneWeights[i]);
+			uint32 ControlPointIndex = CornerControlPointIndices[CornerID];
+			const FVector& Normal = CornerNormals[CornerID];
+			const FVector2D& UV = CornerUVs[CornerID];
+			const FSkinnedVertex& ControlPointVertex = Importer.SkinnedVertices[ControlPointIndex];
+
+			VKey Key{};
+			Key.cp = ControlPointIndex;
+			Key.nx = QuantizeFloat(Normal.X);
+			Key.ny = QuantizeFloat(Normal.Y);
+			Key.nz = QuantizeFloat(Normal.Z);
+			Key.ux = QuantizeFloat(UV.X);
+			Key.uy = QuantizeFloat(UV.Y);
+
+			for (int i = 0; i < 4; ++i)
+			{
+				Key.bi[i] = static_cast<uint8>(ControlPointVertex.boneIndices[i]);
+				Key.bw[i] = QuantizeWeight(ControlPointVertex.boneWeights[i]);
+			}
+
+			auto It = VertexLUT.find(Key);
+			if (It != VertexLUT.end())
+				return It->second;
+
+			// 새로운 정점 추가
+			FSkinnedVertex NewVertex{};
+			NewVertex.pos = ControlPointVertex.pos;
+			NewVertex.normal = Normal;
+			NewVertex.uv = UV;
+
+			std::copy_n(ControlPointVertex.boneIndices, 4, NewVertex.boneIndices);
+			std::copy_n(ControlPointVertex.boneWeights, 4, NewVertex.boneWeights);
+
+			uint32 NewIndex = static_cast<uint32>(NewAsset->Vertices.size());
+			NewAsset->Vertices.push_back(NewVertex);
+			VertexLUT.emplace(Key, NewIndex);
+			return NewIndex;
+		};
+
+	// ────────────────────────────────────────────────
+	// [2-4] 삼각형 인덱스 버퍼 생성 (머티리얼별 버킷 분류)
+	// ────────────────────────────────────────────────
+	for (size_t T = 0; T < TriangleCount; ++T)
+	{
+		uint32 Corner0 = TriangleCornerIndices[T * 3 + 0];
+		uint32 Corner1 = TriangleCornerIndices[T * 3 + 1];
+		uint32 Corner2 = TriangleCornerIndices[T * 3 + 2];
+
+		uint32 Vertex0 = GetVertexIndex(Corner0);
+		uint32 Vertex1 = GetVertexIndex(Corner1);
+		uint32 Vertex2 = GetVertexIndex(Corner2);
+
+		size_t Bucket = 0;
+		if (!TriangleMaterialIndices.empty())
+		{
+			int MatIndex = TriangleMaterialIndices[T];
+			Bucket = (MatIndex >= 0) ? static_cast<size_t>(MatIndex) : 0;
+
+			// 만약 FBX에 없는 머티리얼 인덱스가 들어왔다면 확장
+			if (Bucket >= IndexBuckets.size())
+				IndexBuckets.resize(Bucket + 1);
 		}
 
-		// 중복 정점 검색
-		auto It = VertexLUT.find(Key);
-		uint32 VertexIndex = 0;
-
-		if (It == VertexLUT.end())
-		{
-            FSkinnedVertex Vertex{};
-            Vertex.pos = ControlPointVertex.pos;
-            Vertex.normal = Normal;
-            Vertex.uv = UV;
-			// 4 개 원소 복사 .
-            std::copy_n(ControlPointVertex.boneIndices, 4, Vertex.boneIndices);
-            std::copy_n(ControlPointVertex.boneWeights, 4, Vertex.boneWeights);
-
-			VertexIndex = static_cast<uint32>(NewAsset->Vertices.size());
-			NewAsset->Vertices.push_back(Vertex);
-			VertexLUT.emplace(Key, VertexIndex);
-		}
-		else
-		{
-			VertexIndex = It->second;
-		}
-
-		NewAsset->Indices.push_back(VertexIndex);
+		IndexBuckets[Bucket].push_back(Vertex0);
+		IndexBuckets[Bucket].push_back(Vertex1);
+		IndexBuckets[Bucket].push_back(Vertex2);
 	}
 
 	// ────────────────────────────────────────────────
-	// [3] 캐시 파일 저장 (예외 없이)
+	// [2-5] 버킷 병합 → 최종 인덱스 버퍼 및 섹션 정보 생성
+	// ────────────────────────────────────────────────
+	NewAsset->Indices.clear();
+	NewAsset->Sections.clear();
+
+	uint32 StartIndex = 0;
+	for (size_t M = 0; M < IndexBuckets.size(); ++M)
+	{
+		const auto& Indices = IndexBuckets[M];
+		if (Indices.empty())
+			continue;
+
+		FGroupInfo Section{};
+		Section.StartIndex = StartIndex;
+		Section.IndexCount = static_cast<uint32>(Indices.size());
+		// Section.MaterialName은 이후 매핑 단계에서 지정 가능
+
+		NewAsset->Sections.push_back(Section);
+		NewAsset->Indices.insert(NewAsset->Indices.end(), Indices.begin(), Indices.end());
+
+		StartIndex += Section.IndexCount;
+	}
+
+	NewAsset->bHasMaterial = !NewAsset->Sections.empty();
+
+	// ────────────────────────────────────────────────
+	// [3] 캐시 파일 저장
 	// ────────────────────────────────────────────────
 	FWindowsBinWriter Writer(BinPath);
 	if (Writer.IsOpen())
@@ -197,5 +281,3 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	FBXSkeletalAssetMap.Add(NormalizedPath, NewAsset);
 	return NewAsset;
 }
-
-
