@@ -256,8 +256,8 @@ void FObjManager::Preload()
 		}
 	}
 
-	// 4) 모든 StaticMeshs 가져오기
-	RESOURCE.SetStaticMeshs();
+	// 4) 모든 StaticMeshes 가져오기
+	RESOURCE.SetStaticMeshes();
 
 	UE_LOG("FObjManager::Preload: Loaded %zu .obj files from %s", LoadedCount, DataDir.string().c_str());
 }

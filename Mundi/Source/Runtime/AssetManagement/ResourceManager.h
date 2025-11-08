@@ -87,8 +87,8 @@ public:
 	// --- 캐시 관리 ---
 	FMeshBVH* GetMeshBVH(const FString& ObjPath);
 	FMeshBVH* GetOrBuildMeshBVH(const FString& ObjPath, const struct FStaticMesh* StaticMeshAsset);
-	void SetStaticMeshs();
-	const TArray<UStaticMesh*>& GetStaticMeshs() { return StaticMeshs; }
+	void SetStaticMeshes();
+	const TArray<UStaticMesh*>& GetStaticMeshs() { return StaticMeshes; }
 
 	void SetAudioFiles();  
 
@@ -114,7 +114,7 @@ protected:
 	TMap<FString, TArray<D3D11_INPUT_ELEMENT_DESC>> ShaderToInputLayoutMap;
 	TMap<FString, FString> TextureToShaderMap;
 
-	TArray<UStaticMesh*> StaticMeshs;
+	TArray<UStaticMesh*> StaticMeshes;
 
 	TArray<USound*> Sounds;
 
