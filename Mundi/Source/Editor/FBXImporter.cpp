@@ -304,31 +304,32 @@ void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
 
         for (int i = 0; i < CPCount; ++i)
         {
-            const int v = Indices[i];
-            const float w = static_cast<float>(Weights[i]);
+            const int v = Indices[i]; // 정점 인덱스 
+            const float w = static_cast<float>(Weights[i]); // 가중치 
+            // 잘못된 값이면 패스 
             if (v < 0 || v >= VertexCount || w <= 0.0f) continue;
 
-            FSkinnedVertex& SV = SkinnedVertices[v];
+            FSkinnedVertex& SkinnedVertex = SkinnedVertices[v];
             uint8& Count = InfluenceCount[v];
             constexpr int MaxInf = 4;
 
             if (Count < MaxInf)
             {
-                SV.boneIndices[Count] = ClusterIndex;
-                SV.boneWeights[Count] = w;
+                SkinnedVertex.boneIndices[Count] = ClusterIndex;
+                SkinnedVertex.boneWeights[Count] = w;
                 ++Count;
             }
             else
             {
-                int minIdx = 0; float minW = SV.boneWeights[0];
+                int minIdx = 0; float minW = SkinnedVertex.boneWeights[0];
                 for (int s = 1; s < MaxInf; ++s)
                 {
-                    if (SV.boneWeights[s] < minW) { minW = SV.boneWeights[s]; minIdx = s; }
+                    if (SkinnedVertex.boneWeights[s] < minW) { minW = SkinnedVertex.boneWeights[s]; minIdx = s; }
                 }
                 if (w > minW)
                 {
-                    SV.boneIndices[minIdx] = ClusterIndex;
-                    SV.boneWeights[minIdx] = w;
+                    SkinnedVertex.boneIndices[minIdx] = ClusterIndex;
+                    SkinnedVertex.boneWeights[minIdx] = w;
                 }
             }
         }
