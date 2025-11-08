@@ -1,5 +1,9 @@
 ﻿#include "pch.h"
 #include "FbxManager.h"
+#include "ObjectIterator.h"
+
+TMap<FString, FSkeletalMesh*> FFbxManager::CachedAssets;
+TMap<FString, USkeletalMesh*> FFbxManager::CachedResources;
 
 static inline FMatrix FbxAMatrixToFMatrix(const FbxAMatrix& A)
 {
@@ -174,6 +178,63 @@ void FFBXImporter::ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData)
 	}
 }
 
+void FFbxManager::Preload()
+{
+	const fs::path DataDir(GDataDir);
+
+	if (!fs::exists(DataDir) || !fs::is_directory(DataDir))
+	{
+		UE_LOG("FFbxManager::Preload: Data directory not found: %s", DataDir.string().c_str());
+		return;
+	}
+
+	size_t LoadedCount = 0;
+	std::unordered_set<FString> ProcessedFiles; // 중복 로딩 방지
+
+	for (const auto& Entry : fs::recursive_directory_iterator(DataDir))
+	{
+		if (!Entry.is_regular_file())
+			continue;
+
+		const fs::path& Path = Entry.path();
+		FString Extension = Path.extension().string();
+		std::transform(Extension.begin(), Extension.end(), Extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+		if (Extension == ".fbx")
+		{
+			FString PathStr = NormalizePath(Path.string());
+
+			// 이미 처리된 파일인지 확인
+			if (ProcessedFiles.find(PathStr) == ProcessedFiles.end())
+			{
+				ProcessedFiles.insert(PathStr);
+				LoadFbxSkeletalMesh(PathStr);
+				++LoadedCount;
+			}
+		}
+	}
+
+	// 모든 SkeletalMeshes 가져오기
+	RESOURCE.SetSkeletalMeshes();
+
+	UE_LOG("FFbxManager::Preload: Loaded %zu .obj files from %s", LoadedCount, DataDir.string().c_str());
+}
+
+void FFbxManager::Clear()
+{
+	for (auto& Pair : CachedResources)
+	{
+		delete Pair.second;
+	}
+	CachedResources.Empty();
+
+	for (auto& Pair : CachedAssets)
+	{
+		delete Pair.second;
+	}
+	CachedAssets.Empty();
+}
+
 FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName)
 {
 	return nullptr;
@@ -181,7 +242,25 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 
 USkeletalMesh* FFbxManager::LoadFbxSkeletalMesh(const FString& PathFileName)
 {
-	return nullptr;
+	// 0) 경로
+	FString NormalizedPathStr = NormalizePath(PathFileName);
+
+	// 1) 이미 로드된 USkeletalMesh가 있는지 전체 검색 (정규화된 경로로 비교)
+	for (TObjectIterator<USkeletalMesh> It; It; ++It)
+	{
+	    USkeletalMesh* SkeletalMesh = *It;
+
+	    if (SkeletalMesh->GetFilePath() == NormalizedPathStr)
+	    {
+	        return SkeletalMesh;
+	    }
+	}
+
+	// 2) 없으면 새로 로드(정규화된 경로 사용)
+	USkeletalMesh* SkeletalMesh = UResourceManager::GetInstance().Load<USkeletalMesh>(NormalizedPathStr);
+
+	UE_LOG("USkeletalMesh(filename: '%s') is successfully created!", NormalizedPathStr.c_str());
+	return SkeletalMesh;
 }
 
 bool FFbxManager::IsSkeletalMesh(FbxMesh* Mesh)

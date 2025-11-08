@@ -149,11 +149,15 @@ void UResourceManager::SetStaticMeshes()
     StaticMeshes = GetAll<UStaticMesh>();
 }
 
+void UResourceManager::SetSkeletalMeshes()
+{
+    SkeletalMeshes = GetAll<USkeletalMesh>();
+}
+
 void UResourceManager::SetAudioFiles()
 { 
     Sounds = GetAll<USound>();
 }
-
 
 void UResourceManager::CreateAxisMesh(float Length, const FString& FilePath)
 {

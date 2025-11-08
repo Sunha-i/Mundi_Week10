@@ -4,7 +4,8 @@
 #include "SelectionManager.h"
 #include "FViewport.h"
 #include "PlayerCameraManager.h"
-#include <ObjManager.h>
+#include "ObjManager.h"
+#include "FbxManager.h"
 #include "FAudioDevice.h"
 #include <sol/sol.hpp>
 
@@ -194,9 +195,9 @@ bool UGameEngine::Startup(HINSTANCE hInstance)
     // 매니저 초기화
     INPUT.Initialize(HWnd);
 
-    FObjManager::Preload();
-
     // Preload audio assets
+    FObjManager::Preload();
+    FFbxManager::Preload();
     FAudioDevice::Preload();
 
     ///////////////////////////////////
@@ -340,6 +341,7 @@ void UGameEngine::Shutdown()
     // because ObjStaticMeshMap is a static member variable that may be destroyed
     // before the global GEngine variable's destructor runs
     FObjManager::Clear();
+    FFbxManager::Clear();
 
     // IMPORTANT: Explicitly release Renderer before RHIDevice destructor runs
     // Renderer may hold references to D3D resources

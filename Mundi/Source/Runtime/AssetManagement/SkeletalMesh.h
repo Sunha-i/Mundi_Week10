@@ -22,7 +22,7 @@ struct FSkinnedVertex
 struct FSkeletalMesh
 {
 	FString PathFileName;
-	FString CacheFilePath;	// Cached source path (ex: DerivedDataCache/character.fbx.bin)
+	FString CacheFilePath;	// Cached source path (ex: DerivedDataCache/character.skm.bin)
 
 	TArray<FSkinnedVertex> Vertices;
 	TArray<uint32> Indices;
@@ -60,7 +60,7 @@ class USkeletalMesh : public UResourceBase
 public:
 	DECLARE_CLASS(USkeletalMesh, UResourceBase)
 
-	void Load(ID3D11Device* InDevice);
+	void Load(const FString& InFilePath, ID3D11Device* InDevice, EVertexLayoutType InVertexType = EVertexLayoutType::PositionColorTexturNormal);
 	void Release();
 
 	ID3D11Buffer* GetVertexBuffer() const { return VertexBuffer; }
@@ -70,10 +70,15 @@ public:
 	uint32 GetIndexCount() const { return IndexCount; }
 
 private:
+	void CreateVertexBuffer(FSkeletalMesh* InStaticMesh, ID3D11Device* InDevice, EVertexLayoutType InVertexType);
+	void CreateIndexBuffer(FSkeletalMesh* InStaticMesh, ID3D11Device* InDevice);
+	void ReleaseResources();
+
 	ID3D11Buffer* VertexBuffer = nullptr;
 	ID3D11Buffer* IndexBuffer = nullptr;
 	uint32 VertexCount = 0;
 	uint32 IndexCount = 0;
 
+	FString CacheFilePath;  // Cached Source Path (ex: DerivedDataCache/human.skm.bin)
 	FSkeletalMesh* SkeletalMeshAsset = nullptr;
 };

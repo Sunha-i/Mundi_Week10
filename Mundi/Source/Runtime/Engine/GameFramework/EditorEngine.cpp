@@ -3,8 +3,8 @@
 #include "USlateManager.h"
 #include "SelectionManager.h"
 #include "FAudioDevice.h"
-#include <ObjManager.h>
-
+#include "ObjManager.h"
+#include "FbxManager.h"
 
 float UEditorEngine::ClientWidth = 1024.0f;
 float UEditorEngine::ClientHeight = 1024.0f;
@@ -192,7 +192,7 @@ bool UEditorEngine::Startup(HINSTANCE hInstance)
     INPUT.Initialize(HWnd);
 
     FObjManager::Preload(); 
-
+    FFbxManager::Preload();
     FAudioDevice::Preload();
 
     ///////////////////////////////////
@@ -347,6 +347,7 @@ void UEditorEngine::Shutdown()
     // because ObjStaticMeshMap is a static member variable that may be destroyed
     // before the global GEngine variable's destructor runs
     FObjManager::Clear();
+    FFbxManager::Clear();
 
     // AudioDevice 종료
     FAudioDevice::Shutdown();

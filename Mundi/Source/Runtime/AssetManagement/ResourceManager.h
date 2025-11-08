@@ -3,6 +3,7 @@
 #include "Object.h"
 #include "Shader.h"
 #include "StaticMesh.h"
+#include "SkeletalMesh.h"
 #include "Material.h"
 #include "Texture.h"
 #include "TextureConverter.h"
@@ -87,6 +88,7 @@ public:
 	FMeshBVH* GetMeshBVH(const FString& ObjPath);
 	FMeshBVH* GetOrBuildMeshBVH(const FString& ObjPath, const struct FStaticMesh* StaticMeshAsset);
 	void SetStaticMeshes();
+	void SetSkeletalMeshes();
 	const TArray<UStaticMesh*>& GetStaticMeshs() { return StaticMeshes; }
 
 	void SetAudioFiles();  
@@ -114,7 +116,7 @@ protected:
 	TMap<FString, FString> TextureToShaderMap;
 
 	TArray<UStaticMesh*> StaticMeshes;
-
+	TArray<USkeletalMesh*> SkeletalMeshes;
 	TArray<USound*> Sounds;
 
 	// Deprecated
