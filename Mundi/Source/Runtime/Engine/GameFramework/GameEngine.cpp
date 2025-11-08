@@ -5,6 +5,7 @@
 #include "FViewport.h"
 #include "PlayerCameraManager.h"
 #include <ObjManager.h>
+#include "FBXManager.h"
 #include "FAudioDevice.h"
 #include <sol/sol.hpp>
 
@@ -340,6 +341,9 @@ void UGameEngine::Shutdown()
     // because ObjStaticMeshMap is a static member variable that may be destroyed
     // before the global GEngine variable's destructor runs
     FObjManager::Clear();
+
+    // Clear FFBXManager skeletal cooked asset cache to avoid leaks
+    FFBXManager::Get().Clear();
 
     // IMPORTANT: Explicitly release Renderer before RHIDevice destructor runs
     // Renderer may hold references to D3D resources

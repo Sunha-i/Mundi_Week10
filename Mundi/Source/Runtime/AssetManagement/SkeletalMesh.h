@@ -61,6 +61,8 @@ public:
 
     void SetSkeletalMeshAsset(FSkeletalMesh* In) { SkeletalMeshAsset = In; }
     FSkeletalMesh* GetSkeletalMeshAsset() const { return SkeletalMeshAsset; }
+    const FString& GetCacheFilePath() const { static FString Empty; return SkeletalMeshAsset ? SkeletalMeshAsset->CacheFilePath : Empty; }
+    const FString& GetAssetPathFileName() const { return SkeletalMeshAsset ? SkeletalMeshAsset->PathFileName : FilePath; }
 
     // (미래) GPU 리소스 연동을 위한 접근자
     ID3D11Buffer* GetVertexBuffer() const { return VertexBuffer; }

@@ -8,6 +8,7 @@ class USkinnedMeshComponent : public UMeshComponent
 {
 public:
     DECLARE_CLASS(USkinnedMeshComponent, UMeshComponent)
+    GENERATED_REFLECTION_BODY()
 
     USkinnedMeshComponent() = default;
     ~USkinnedMeshComponent() override = default;
@@ -21,4 +22,3 @@ public:
 private:
     USkeletalMesh* SkeletalMesh = nullptr;
 };
-

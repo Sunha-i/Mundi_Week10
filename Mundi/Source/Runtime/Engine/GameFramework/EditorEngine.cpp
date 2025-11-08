@@ -4,6 +4,7 @@
 #include "SelectionManager.h"
 #include "FAudioDevice.h"
 #include <ObjManager.h>
+#include "FBXManager.h"
 #include "FBXImporter.h"
 
 
@@ -350,6 +351,9 @@ void UEditorEngine::Shutdown()
     // because ObjStaticMeshMap is a static member variable that may be destroyed
     // before the global GEngine variable's destructor runs
     FObjManager::Clear();
+
+    // Clear FFBXManager skeletal cooked asset cache to avoid leaks
+    FFBXManager::Get().Clear();
 
     // AudioDevice 종료
     FAudioDevice::Shutdown();

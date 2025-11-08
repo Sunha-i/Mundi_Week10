@@ -41,28 +41,31 @@ private:
 	static bool RenderStaticMeshProperty(const FProperty& Prop, void* Instance);
 	static bool RenderMaterialProperty(const FProperty& Prop, void* Instance);
 	static bool RenderMaterialArrayProperty(const FProperty& Prop, void* Instance);
-	static bool RenderSingleMaterialSlot(const char* Label, UMaterialInterface** MaterialPtr, UObject* OwningObject, uint32 MaterialIndex);	// 단일 UMaterial* 슬롯을 렌더링하는 헬퍼 함수.
-	static bool RenderTextureSelectionCombo(const char* Label, UTexture* CurrentTexture, UTexture*& OutNewTexture);
-	static bool RenderSoundSelectionCombo(const char* Label, USound* CurrentSound, USound*& OutNewSound);
-	// Simplified sound combo without thumbnails
-	static bool RenderSoundSelectionComboSimple(const char* Label, USound* CurrentSound, USound*& OutNewSound);
+    static bool RenderSingleMaterialSlot(const char* Label, UMaterialInterface** MaterialPtr, UObject* OwningObject, uint32 MaterialIndex);	// 단일 UMaterial* 슬롯을 렌더링하는 헬퍼 함수.
+    static bool RenderTextureSelectionCombo(const char* Label, UTexture* CurrentTexture, UTexture*& OutNewTexture);
+    static bool RenderSoundSelectionCombo(const char* Label, USound* CurrentSound, USound*& OutNewSound);
+    // Simplified sound combo without thumbnails
+    static bool RenderSoundSelectionComboSimple(const char* Label, USound* CurrentSound, USound*& OutNewSound);
+    static bool RenderSkeletalMeshProperty(const FProperty& Prop, void* Instance);
 
 
 	// Transform 프로퍼티 렌더링 헬퍼 함수
 	static bool RenderTransformProperty(const FProperty& Prop, void* Instance);
 
 	static void CacheResources();	// 필요할 때 리소스 목록을 멤버 변수에 캐시합니다.
-	static void ClearResourcesCache();	// 렌더링 패스가 끝날 때 캐시를 비웁니다.
+    static void ClearResourcesCache();	// 렌더링 패스가 끝날 때 캐시를 비웁니다.
 
 private:
-	// 렌더링 중 캐시되는 리소스 목록
-	static TArray<FString> CachedStaticMeshPaths;
-	static TArray<const char*> CachedStaticMeshItems;
-	static TArray<FString> CachedMaterialPaths;
-	static TArray<const char*> CachedMaterialItems;
-	static TArray<FString> CachedShaderPaths;
-	static TArray<const char*> CachedShaderItems;
-	static TArray<FString> CachedTexturePaths;
+    // 렌더링 중 캐시되는 리소스 목록
+    static TArray<FString> CachedStaticMeshPaths;
+    static TArray<const char*> CachedStaticMeshItems;
+    static TArray<FString> CachedSkeletalMeshPaths;
+    static TArray<const char*> CachedSkeletalMeshItems;
+    static TArray<FString> CachedMaterialPaths;
+    static TArray<const char*> CachedMaterialItems;
+    static TArray<FString> CachedShaderPaths;
+    static TArray<const char*> CachedShaderItems;
+    static TArray<FString> CachedTexturePaths;
 	static TArray<const char*> CachedTextureItems;
 	static TArray<FString> CachedSoundPaths;
 	static TArray<const char*> CachedSoundItems;
