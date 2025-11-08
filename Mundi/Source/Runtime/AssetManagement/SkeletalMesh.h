@@ -41,7 +41,7 @@ public:
     DECLARE_CLASS(USkeletalMesh, UResourceBase)
 
     USkeletalMesh() = default;
-    virtual ~USkeletalMesh() override = default;
+    virtual ~USkeletalMesh() override { ReleaseResources(); }
 
     void Load(const FString& InFilePath, ID3D11Device* InDevice);
 
@@ -62,5 +62,10 @@ private:
     uint32 VertexCount = 0;
     uint32 IndexCount = 0;
     FAABB LocalBound;
+
+private:
+    void CreateVertexBuffer(const FSkeletalMesh* InMesh, ID3D11Device* InDevice);
+    void CreateIndexBuffer(const FSkeletalMesh* InMesh, ID3D11Device* InDevice);
+    void ReleaseResources();
 };
 
