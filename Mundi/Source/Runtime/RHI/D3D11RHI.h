@@ -3,7 +3,8 @@
 #include "ResourceManager.h"
 #include "VertexData.h"
 #include "ConstantBufferType.h"
-
+#include "FbxManager.h"
+#include "SkeletalMesh.h"
 
 #define DECLARE_CONSTANT_BUFFER(TYPE)\
 ID3D11Buffer* TYPE##Buffer{};
@@ -76,9 +77,15 @@ public:
 	template<typename TVertex>
 	static HRESULT CreateVertexBuffer(ID3D11Device* device, const std::vector<FNormalVertex>& srcVertices, ID3D11Buffer** outBuffer);
 
-	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FMeshData* meshData, ID3D11Buffer** outBuffer);
+	template<typename TVertex>
+	static HRESULT CreateVertexBufferImpl(ID3D11Device* device, const std::vector<FSkinnedVertex>& srcVertices, ID3D11Buffer** outBuffer, D3D11_USAGE usage, UINT cpuAccessFlags);
 
+	template<typename TVertex>
+	static HRESULT CreateVertexBuffer(ID3D11Device* device, const std::vector<FSkinnedVertex>& srcVertices, ID3D11Buffer** outBuffer);
+
+	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FMeshData* meshData, ID3D11Buffer** outBuffer);
 	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FStaticMesh* mesh, ID3D11Buffer** outBuffer);
+	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FSkeletalMesh* mesh, ID3D11Buffer** outBuffer);
 
 	CONSTANT_BUFFER_LIST(DECLARE_UPDATE_CONSTANT_BUFFER_FUNC)
 	CONSTANT_BUFFER_LIST(DECLARE_SET_CONSTANT_BUFFER_FUNC)
@@ -349,6 +356,31 @@ inline HRESULT D3D11RHI::CreateVertexBufferImpl(ID3D11Device* device, const std:
 	return device->CreateBuffer(&vbd, &vinitData, outBuffer);
 }
 
+template<typename TVertex>
+inline HRESULT D3D11RHI::CreateVertexBufferImpl(ID3D11Device* device, const std::vector<FSkinnedVertex>& srcVertices, ID3D11Buffer** outBuffer, D3D11_USAGE usage, UINT cpuAccessFlags)
+{
+	std::vector<TVertex> vertexArray;
+	vertexArray.reserve(srcVertices.size());
+
+	for (size_t i = 0; i < srcVertices.size(); ++i)
+	{
+		TVertex vtx{};
+		vtx.FillFrom(srcVertices[i]); // 각 TVertex에서 FillFrom 구현 필요
+		vertexArray.push_back(vtx);
+	}
+
+	D3D11_BUFFER_DESC vbd = {};
+	vbd.Usage = usage;
+	vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vbd.CPUAccessFlags = cpuAccessFlags;
+	vbd.ByteWidth = static_cast<UINT>(sizeof(TVertex) * vertexArray.size());
+
+	D3D11_SUBRESOURCE_DATA vinitData = {};
+	vinitData.pSysMem = vertexArray.data();
+
+	return device->CreateBuffer(&vbd, &vinitData, outBuffer);
+}
+
 template<>
 inline HRESULT D3D11RHI::CreateVertexBuffer<FVertexSimple>(ID3D11Device* device, const std::vector<FNormalVertex>& srcVertices, ID3D11Buffer** outBuffer)
 {
@@ -360,6 +392,13 @@ template<>
 inline HRESULT D3D11RHI::CreateVertexBuffer<FVertexDynamic>(ID3D11Device* device, const std::vector<FNormalVertex>& srcVertices, ID3D11Buffer** outBuffer)
 {
 	return CreateVertexBufferImpl<FVertexDynamic>(device, srcVertices, outBuffer, D3D11_USAGE_DEFAULT, 0);
+}
+
+// PositionNormalTexSkinned
+template<>
+inline HRESULT D3D11RHI::CreateVertexBuffer<FVertexSkinned>(ID3D11Device* device, const std::vector<FSkinnedVertex>& srcVertices, ID3D11Buffer** outBuffer)
+{
+	return CreateVertexBufferImpl<FVertexSkinned>(device, srcVertices, outBuffer, D3D11_USAGE_DEFAULT, 0);
 }
 
 // Billboard

@@ -60,7 +60,7 @@ class USkeletalMesh : public UResourceBase
 public:
 	DECLARE_CLASS(USkeletalMesh, UResourceBase)
 
-	void Load(const FString& InFilePath, ID3D11Device* InDevice, EVertexLayoutType InVertexType = EVertexLayoutType::PositionColorTexturNormal);
+	void Load(const FString& InFilePath, ID3D11Device* InDevice, EVertexLayoutType InVertexType = EVertexLayoutType::PositionNormalTexSkinned);
 	void Release();
 
 	ID3D11Buffer* GetVertexBuffer() const { return VertexBuffer; }

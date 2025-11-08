@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Vector.h"
 #include "Enums.h"
+#include "SkeletalMesh.h"
 
 struct FVertexSimple
 {
@@ -42,6 +43,35 @@ struct FVertexDynamic
         UV = src.tex;
         Tangent = src.Tangent;
         Normal = FVector{ src.normal.X, src.normal.Y, src.normal.Z };
+    }
+};
+
+struct FVertexSkinned 
+{
+    FVector Position;
+    FVector Normal;
+    FVector2D TexCoord;
+    FVector4 BoneIndices;
+    FVector4 BoneWeights;
+
+    void FillFrom(const FSkinnedVertex& src)
+    {
+        Position = src.Position;
+        Normal = src.Normal;
+        TexCoord = src.TexCoord;
+
+        BoneIndices = FVector4(
+            static_cast<float>(src.BoneIndices[0]),
+            static_cast<float>(src.BoneIndices[1]),
+            static_cast<float>(src.BoneIndices[2]),
+            static_cast<float>(src.BoneIndices[3])
+        );
+        BoneWeights = FVector4(
+            src.BoneWeights[0],
+            src.BoneWeights[1],
+            src.BoneWeights[2],
+            src.BoneWeights[3]
+        );
     }
 };
 

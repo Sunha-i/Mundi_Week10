@@ -22,12 +22,12 @@ void USkeletalMesh::Load(const FString& InFilePath, ID3D11Device* InDevice, EVer
 
 void USkeletalMesh::CreateVertexBuffer(FSkeletalMesh* InSkeletalMesh, ID3D11Device* InDevice, EVertexLayoutType InVertexType)
 {
-    /*HRESULT hr;
-    assert(SUCCEEDED(hr));*/
+    HRESULT hr = D3D11RHI::CreateVertexBuffer<FVertexSkinned>(InDevice, InSkeletalMesh->Vertices, &VertexBuffer);
+    assert(SUCCEEDED(hr));
 }
 
 void USkeletalMesh::CreateIndexBuffer(FSkeletalMesh* InSkeletalMesh, ID3D11Device* InDevice)
 {
-    /*HRESULT hr;
-    assert(SUCCEEDED(hr));*/
+    HRESULT hr = D3D11RHI::CreateIndexBuffer(InDevice, InSkeletalMesh, &IndexBuffer);
+    assert(SUCCEEDED(hr));
 }
