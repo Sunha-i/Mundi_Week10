@@ -8,7 +8,7 @@ class USkeletalMesh : public UMeshBase
     DECLARE_CLASS(USkeletalMesh, UMeshBase)
 public:
     USkeletalMesh() = default;
-    virtual ~USkeletalMesh() override = default;
+    virtual ~USkeletalMesh() override;
 
     void Load(
         const FString& InFilePath,

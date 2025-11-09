@@ -5,6 +5,12 @@
 
 IMPLEMENT_CLASS(USkeletalMesh)
 
+USkeletalMesh::~USkeletalMesh()
+{
+    if (SkeletalMeshAsset)
+        DeleteObject(SkeletalMeshAsset);
+};
+
 void USkeletalMesh::Load(
     const FString& InFilePath,
     ID3D11Device* InDevice,
