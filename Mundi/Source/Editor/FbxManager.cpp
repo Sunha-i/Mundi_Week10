@@ -443,7 +443,7 @@ USkeletalMesh* FFbxManager::LoadFbxSkeletalMesh(const FString& PathFileName)
     // 0) 경로
     FString NormalizedPathStr = NormalizePath(PathFileName);
 
-    // 1) 이미 로드된 UStaticMesh가 있는지 전체 검색 (정규화된 경로로 비교)
+    // 1) 이미 로드된 USkeletalMesh가 있는지 전체 검색 (정규화된 경로로 비교)
     for (TObjectIterator<USkeletalMesh> It; It; ++It)
     {
         USkeletalMesh* SkeletalMesh = *It;

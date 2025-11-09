@@ -83,10 +83,10 @@ void USkeletalMeshComponent::CollectMeshBatches(
     {
         uint32 IndexCount = 0;
         uint32 StartIndex = 0;
+        const FFlesh& Flesh = FleshesInfo[SectionIndex];
 
         if (bHasSections)
         {
-            const FFlesh& Flesh = FleshesInfo[SectionIndex];
             IndexCount = Flesh.IndexCount;
             StartIndex = Flesh.StartIndex;
         }
@@ -132,8 +132,18 @@ void USkeletalMeshComponent::CollectMeshBatches(
         BatchElement.IndexCount = IndexCount;
         BatchElement.StartIndex = StartIndex;
         BatchElement.BaseVertexIndex = 0;
-        // TODO: 본의 가중치 적용
-        BatchElement.WorldMatrix = GetWorldMatrix();
+
+        // 본의 가중치 적용
+        FTransform BoneOffSet;
+        for (int32 i = 0; i < Flesh.Bones.size(); i++)
+        {
+            UBone* Bone = Flesh.Bones[i];
+            float Weight = Flesh.Weights[i];
+            BoneOffSet += Bone->GetBoneOffset() * Weight;
+        }
+        FMatrix SkinningMatrix = BoneOffSet.GetModelingMatrix();
+        
+        BatchElement.WorldMatrix = GetWorldMatrix() * SkinningMatrix;
         BatchElement.ObjectID = InternalIndex;
         BatchElement.PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
