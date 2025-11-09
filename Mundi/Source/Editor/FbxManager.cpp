@@ -168,14 +168,28 @@ void FFBXImporter::ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData)
 
 	// 3) Index
 	const int PolygonCount = Mesh->GetPolygonCount();
-	OutMeshData.Indices.Reserve(PolygonCount * 3);
+	OutMeshData.Indices.Reserve(PolygonCount * 4);	// Assuming quads on average
 
 	for (int i = 0; i < PolygonCount; ++i)
 	{
-		for (int j = 0; j < 3; ++j)
+		const int VertCount = Mesh->GetPolygonSize(i);
+		if (VertCount < 3)
 		{
-			int ControlPointIndex = Mesh->GetPolygonVertex(i, j);
-			OutMeshData.Indices.Add(ControlPointIndex);
+			continue;	// Ignore point or line
+		}
+
+		// Fan Triangulation
+		// Triangulates a polygon with N vertices into (N-2) triangles.
+		// ex: (v0, v1, v2), (v0, v2, v3), ...
+		int v0 = Mesh->GetPolygonVertex(i, 0);
+		for (int j = 1; j < VertCount - 1; ++j)
+		{
+			int v1 = Mesh->GetPolygonVertex(i, j);
+			int v2 = Mesh->GetPolygonVertex(i, j + 1);
+
+			OutMeshData.Indices.Add(v0);
+			OutMeshData.Indices.Add(v1);
+			OutMeshData.Indices.Add(v2);
 		}
 	}
 
