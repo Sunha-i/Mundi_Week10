@@ -30,6 +30,12 @@ public:
     bool HasMaterial() const;
 
     uint64 GetFleshesCount() const;
+
+    // Serialization & Duplication
+    virtual void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
+    DECLARE_DUPLICATE(USkeletalMesh)
+    void DuplicateSubObjects() override;
+
 private:
     FSkeletalMesh* SkeletalMeshAsset{};
 };

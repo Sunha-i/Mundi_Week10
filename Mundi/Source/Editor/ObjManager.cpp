@@ -546,7 +546,12 @@ UStaticMesh* FObjManager::LoadObjStaticMesh(const FString& PathFileName)
 }
 
 // obj File to FObjInfo, FMaterialParameters
-bool FObjImporter::LoadObjModel(const FString& InFileName, FObjInfo* const OutObjInfo, TArray<FMaterialInfo>& OutMaterialInfos, bool bIsRightHanded)
+bool FObjImporter::LoadObjModel(
+	const FString& InFileName,
+	FObjInfo* const OutObjInfo,
+	TArray<FMaterialInfo>& OutMaterialInfos,
+	bool bIsRightHanded
+)
 {
 	uint32 subsetCount = 0;
 	FString MtlFileName;

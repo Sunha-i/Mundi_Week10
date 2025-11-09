@@ -117,6 +117,35 @@ uint64 USkeletalMesh::GetFleshesCount() const
 
         exit(1);
     }
-    
+
     return SkeletalMeshAsset->Fleshes.Num();
+}
+
+void USkeletalMesh::Serialize(const bool bInIsLoading, JSON& InOutHandle)
+{
+    // 부모 클래스 직렬화 (FilePath 저장/로드)
+    Super::Serialize(bInIsLoading, InOutHandle);
+
+    if (bInIsLoading) // --- 로드 ---
+    {
+        // FilePath가 로드되었으므로, 그 경로로 다시 Load하여 GPU 버퍼와 Cooked Data 재생성
+        if (!FilePath.empty())
+        {
+            ID3D11Device* Device = GEngine.GetRHIDevice()->GetDevice();
+            Load(FilePath, Device, GetVertexType());
+        }
+    }
+    // 저장 시에는 Super::Serialize가 FilePath를 저장하므로 추가 작업 불필요
+}
+
+void USkeletalMesh::DuplicateSubObjects()
+{
+    Super::DuplicateSubObjects();
+
+    // FSkeletalMesh 깊은 복사 (복사 생성자가 Skeleton과 Fleshes를 모두 복사함)
+    if (SkeletalMeshAsset)
+    {
+        FSkeletalMesh* OriginalAsset = SkeletalMeshAsset;
+        SkeletalMeshAsset = new FSkeletalMesh(*OriginalAsset);
+    }
 }

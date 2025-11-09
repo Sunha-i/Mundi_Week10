@@ -9,7 +9,7 @@ IMPLEMENT_CLASS(USkeletalMeshComponent)
 
 BEGIN_PROPERTIES(USkeletalMeshComponent)
     MARK_AS_COMPONENT("스켈레탈 메시 컴포넌트", "스켈레탈 메시를 렌더링하는 컴포넌트입니다.")
-    ADD_PROPERTY_STATICMESH(USkeletalMesh*, SkeletalMesh, "Skeletal Mesh", true)
+    ADD_PROPERTY_SKELETALMESH(USkeletalMesh*, SkeletalMesh, "Skeletal Mesh", true)
     ADD_PROPERTY_ARRAY(EPropertyType::Material, MaterialSlots, "Materials", true)
 END_PROPERTIES()
 
@@ -156,27 +156,24 @@ void USkeletalMeshComponent::Serialize(
     JSON& InOutHandle
 )
 {
+    // Super::Serialize가 프로퍼티 시스템을 통해 SkeletalMesh를 자동으로 저장/로드함
     Super::Serialize(bInIsLoading, InOutHandle);
 
-    const FString SkeletalMeshKey = "SkeletalMesh";
     const FString MaterialSlotsKey = "MaterialSlots";
 
     if (bInIsLoading) // --- 로드 ---
     {
-        // 1. SkeletalMesh 로드
-        JSON SkeletalMeshJson;
-        if (FJsonSerializer::ReadObject(InOutHandle, SkeletalMeshKey, SkeletalMeshJson, JSON::Make(JSON::Class::Object), false))
-        {
-            // SkeletalMesh를 새로 생성하고 직렬화
-            SkeletalMesh = NewObject<USkeletalMesh>();
-            SkeletalMesh->Serialize(true, SkeletalMeshJson);
-        }
-
-        // 2. 로드 전 기존 동적 인스턴스 모두 정리
+        // 로드 전 기존 동적 인스턴스 모두 정리
         ClearDynamicMaterials();
 
         JSON SlotsArrayJson;
-        if (FJsonSerializer::ReadArray(InOutHandle, MaterialSlotsKey, SlotsArrayJson, JSON::Make(JSON::Class::Array), false))
+        if (FJsonSerializer::ReadArray(
+            InOutHandle,
+            MaterialSlotsKey,
+            SlotsArrayJson,
+            JSON::Make(JSON::Class::Array),
+            false
+        ))
         {
             MaterialSlots.resize(SlotsArrayJson.size());
 
@@ -229,15 +226,9 @@ void USkeletalMeshComponent::Serialize(
     }
     else // --- 저장 ---
     {
-        // 1. SkeletalMesh 저장
-        if (SkeletalMesh)
-        {
-            JSON SkeletalMeshJson = JSON::Make(JSON::Class::Object);
-            SkeletalMesh->Serialize(false, SkeletalMeshJson);
-            InOutHandle[SkeletalMeshKey] = SkeletalMeshJson;
-        }
+        // Super::Serialize가 프로퍼티 시스템을 통해 SkeletalMesh를 자동으로 저장함
 
-        // 2. MaterialSlots 저장
+        // MaterialSlots 저장
         JSON SlotsArrayJson = JSON::Make(JSON::Class::Array);
         for (UMaterialInterface* Mtl : MaterialSlots)
         {
