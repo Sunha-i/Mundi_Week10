@@ -235,7 +235,7 @@ void FFBXImporter::ParseMesh(FbxNode* InNode, FbxMesh* Mesh, FFBXMeshData& OutMe
 		}
 	}
 
-	// 3) TexCoords (if exists)
+	// 3) TexCoords
 	if (Mesh->GetElementUVCount() > 0)
 	{
 		FbxLayerElementUV* UVElement = Mesh->GetElementUV(0);
@@ -264,7 +264,28 @@ void FFBXImporter::ParseMesh(FbxNode* InNode, FbxMesh* Mesh, FFBXMeshData& OutMe
 					}
 				}
 			}
-			else  // Other modes (like eByPolygonVertex) are complex to map directly to the FSkinnedVertex struct for now
+			else if (UVElement->GetMappingMode() == FbxLayerElement::eByPolygonVertex)
+			{
+				const int PolyCount = Mesh->GetPolygonCount();
+				int UVIndex = 0;
+
+				for (int poly = 0; poly < PolyCount; ++poly)
+				{
+					const int VertCount = Mesh->GetPolygonSize(poly);
+					for (int vert = 0; vert < VertCount; ++vert)
+					{
+						int CtrlPointIndex = Mesh->GetPolygonVertex(poly, vert);
+
+						FbxVector2 uv;
+						bool unmapped = false;
+						Mesh->GetPolygonVertexUV(poly, vert, UVElement->GetName(), uv, unmapped);
+
+						OutMeshData.TexCoords[CtrlPointIndex] = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
+						UVIndex++;
+					}
+				}
+			}
+			else
 			{
 				UE_LOG("Unsupported UV mapping mode for skeletal mesh: %d", UVElement->GetMappingMode());
 				for (int i = 0; i < ControlPointCount; ++i)
