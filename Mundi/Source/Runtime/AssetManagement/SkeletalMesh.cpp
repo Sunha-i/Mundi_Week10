@@ -17,6 +17,7 @@ void USkeletalMesh::Load(const FString& InFilePath, ID3D11Device* InDevice, EVer
         CreateIndexBuffer(SkeletalMeshAsset, InDevice);
         VertexCount = static_cast<uint32>(SkeletalMeshAsset->Vertices.size());
         IndexCount = static_cast<uint32>(SkeletalMeshAsset->Indices.size());
+        VertexStride = sizeof(FSkinnedVertex);
     }
 }
 

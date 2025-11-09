@@ -475,7 +475,9 @@ void UResourceManager::InitShaderILMap()
     layout.Add({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 });
     layout.Add({ "TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 });
     layout.Add({ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 48, D3D11_INPUT_PER_VERTEX_DATA, 0 });
-   
+    layout.Add({ "BONEINDICES", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, 64, D3D11_INPUT_PER_VERTEX_DATA, 0 });
+    layout.Add({ "BONEWEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 80, D3D11_INPUT_PER_VERTEX_DATA, 0 });
+
     ShaderToInputLayoutMap["Shaders/Effects/Decal.hlsl"] = layout;
 	ShaderToInputLayoutMap["Shaders/Materials/UberLit.hlsl"] = layout;
 	ShaderToInputLayoutMap["Shaders/Materials/Fireball.hlsl"] = layout; // Use same vertex format as UberLit

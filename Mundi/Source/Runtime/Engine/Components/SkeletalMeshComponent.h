@@ -17,6 +17,8 @@ public:
 	void SetSkeletalMesh(const FString& PathFileName);
 	USkeletalMesh* GetSkeletalMesh() const { return SkeletalMesh; }
 
+	void CollectMeshBatches(TArray<FMeshBatchElement>& OutMeshBatchElements, const FSceneView* View) override;
+
 protected:
 	void MarkWorldPartitionDirty();
 

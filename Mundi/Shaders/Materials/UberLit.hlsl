@@ -72,6 +72,13 @@ cbuffer FLightShadowmBufferType : register(b5)
     float2 ShadowPadding;
 };
 
+#if SKINNED
+cbuffer SkinningBuffer : register(b9)
+{
+    matrix BoneTransforms[128]; // maximum 128 bones
+};
+#endif
+
 // --- Material.SpecularColor 지원 매크로 ---
 // LightingCommon.hlsl의 CalculateSpecular에서 Material.SpecularColor를 사용하도록 설정
 // 금속 재질의 컬러 Specular 지원
@@ -104,6 +111,8 @@ struct VS_INPUT
     float2 TexCoord : TEXCOORD0;
     float4 Tangent : TANGENT0;
     float4 Color : COLOR;
+    uint4 BoneIndices : BONEINDICES0;
+    float4 BoneWeights : BONEWEIGHTS0;
 };
 
 struct PS_INPUT
@@ -129,8 +138,34 @@ PS_INPUT mainVS(VS_INPUT Input)
 {
     PS_INPUT Out;
     
+    float4 modelPosition;
+    float3 modelNormal;
+    
+#if SKINNED
+    float4 skinnedPosition = float4(0, 0, 0, 0);
+    float3 skinnedNormal = float3(0, 0, 0);
+    
+    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.x]) * Input.BoneWeights.x;
+    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.x]) * Input.BoneWeights.x;
+    
+    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.y]) * Input.BoneWeights.y;
+    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.y]) * Input.BoneWeights.y;
+    
+    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.z]) * Input.BoneWeights.z;
+    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.z]) * Input.BoneWeights.z;
+    
+    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.w]) * Input.BoneWeights.w;
+    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.w]) * Input.BoneWeights.w;
+
+    modelPosition = skinnedPosition;
+    modelNormal = normalize(skinnedNormal);
+#else
+    modelPosition = float4(Input.Position, 1.0f);
+    modelNormal = Input.Normal;
+#endif
+    
     // 위치를 월드 공간으로 먼저 변환
-    float4 worldPos = mul(float4(Input.Position, 1.0f), WorldMatrix);
+    float4 worldPos = mul(modelPosition, WorldMatrix);
     Out.WorldPos = worldPos.xyz;
     
     // 뷰 공간으로 변환
@@ -142,7 +177,7 @@ PS_INPUT mainVS(VS_INPUT Input)
     // 노멀을 월드 공간으로 변환
     // 비균등 스케일에서 올바른 노멀 변환을 위해 WorldInverseTranspose 사용
     // 노멀 벡터는 transpose(inverse(WorldMatrix))로 변환됨
-    float3 worldNormal = normalize(mul(Input.Normal, (float3x3) WorldInverseTranspose));
+    float3 worldNormal = normalize(mul(modelNormal, (float3x3) WorldInverseTranspose));
     Out.Normal = worldNormal;
     float3 Tangent = normalize(mul(Input.Tangent.xyz, (float3x3) WorldMatrix));
     float3 BiTangent = normalize(cross(Tangent, worldNormal) * Input.Tangent.w);

@@ -20,6 +20,7 @@
 #include "BVHierarchy.h"
 #include "SelectionManager.h"
 #include "StaticMeshComponent.h"
+#include "SkeletalMeshComponent.h"
 #include "DecalStatManager.h"
 #include "BillboardComponent.h"
 #include "TextRenderComponent.h"
@@ -585,6 +586,7 @@ void FSceneRenderer::GatherVisibleProxies()
 	//PerformFrustumCulling();
 
 	const bool bDrawStaticMeshes = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_StaticMeshes);
+	const bool bDrawSkeletalMeshes = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_SkeletalMeshes);
 	const bool bDrawDecals = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Decals);
 	const bool bDrawFog = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Fog);
 	const bool bDrawLight = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Lighting);
@@ -640,10 +642,10 @@ void FSceneRenderer::GatherVisibleProxies()
 						{
 							bShouldAdd = bDrawStaticMeshes;
 						}
-						// else if (USkeletalMeshComponent* SkeletalMeshComponent = ...)
-						// {
-						//     bShouldAdd = bDrawSkeletalMeshes;
-						// }
+						else if (USkeletalMeshComponent* SkeletalMeshComponent = Cast<USkeletalMeshComponent>(MeshComponent))
+						{
+						    bShouldAdd = bDrawSkeletalMeshes;
+						}
 
 						if (bShouldAdd)
 						{
@@ -1219,9 +1221,14 @@ void FSceneRenderer::DrawMeshBatches(TArray<FMeshBatchElement>& InMeshBatches, b
 	ID3D11SamplerState* ShadowSampler = RHIDevice->GetSamplerState(RHI_Sampler_Index::Shadow);
 	ID3D11SamplerState* VSMSampler = RHIDevice->GetSamplerState(RHI_Sampler_Index::VSM);
 
+	UE_LOG("--- Drawing %d Batches ---", InMeshBatches.Num());
+	int32 BatchIndex = 0;
+
 	// 정렬된 리스트 순회
 	for (const FMeshBatchElement& Batch : InMeshBatches)
 	{
+		UE_LOG("Batch Index: %d, bIsSkinned: %s", BatchIndex, Batch.bIsSkinned ? "TRUE" : "FALSE");
+
 		// --- 필수 요소 유효성 검사 ---
 		if (!Batch.VertexShader || !Batch.PixelShader || !Batch.VertexBuffer || !Batch.IndexBuffer || Batch.VertexStride == 0)
 		{
@@ -1335,12 +1342,18 @@ void FSceneRenderer::DrawMeshBatches(TArray<FMeshBatchElement>& InMeshBatches, b
 			CurrentTopology = Batch.PrimitiveTopology;
 		}
 
+		if (Batch.bIsSkinned)
+		{
+			RHIDevice->SetAndUpdateConstantBuffer(SkinningBufferType(Batch.BoneTransforms));
+		}
+
 		// 4. 오브젝트별 상수 버퍼 설정 (매번 변경)
 		RHIDevice->SetAndUpdateConstantBuffer(ModelBufferType(Batch.WorldMatrix, Batch.WorldMatrix.InverseAffine().Transpose()));
 		RHIDevice->SetAndUpdateConstantBuffer(ColorBufferType(Batch.InstanceColor, Batch.ObjectID));
 
 		// 5. 드로우 콜 실행
 		RHIDevice->GetDeviceContext()->DrawIndexed(Batch.IndexCount, Batch.StartIndex, Batch.BaseVertexIndex);
+		BatchIndex++;
 	}
 
 	// 루프 종료 후 리스트 비우기 (옵션)

@@ -27,6 +27,7 @@ struct FSkeletalMesh
 	TArray<FSkinnedVertex> Vertices;
 	TArray<uint32> Indices;
 	TArray<FBoneInfo> Bones;
+	TArray<FGroupInfo> GroupInfos;
 
 	bool bHasSkinning = false;
 	bool bHasNormals = false;
@@ -68,10 +69,12 @@ public:
 
 	uint32 GetVertexCount() const { return VertexCount; }
 	uint32 GetIndexCount() const { return IndexCount; }
+	uint32 GetVertexStride() const { return VertexStride; };
 
 	void SetSkeletalMeshAsset(FSkeletalMesh* InSkeletalMesh) { SkeletalMeshAsset = InSkeletalMesh; }
 	FSkeletalMesh* GetSkeletalMeshAsset() const { return SkeletalMeshAsset; }
 
+	const TArray<FGroupInfo>& GetMeshGroupInfo() const { return SkeletalMeshAsset->GroupInfos; }
 	const FString& GetCacheFilePath() const { return CacheFilePath; }
 
 private:
@@ -83,6 +86,7 @@ private:
 	ID3D11Buffer* IndexBuffer = nullptr;
 	uint32 VertexCount = 0;
 	uint32 IndexCount = 0;
+	uint32 VertexStride = 0;
 
 	FString CacheFilePath;  // Cached Source Path (ex: DerivedDataCache/human.skm.bin)
 	FSkeletalMesh* SkeletalMeshAsset = nullptr;

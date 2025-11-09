@@ -62,6 +62,13 @@ struct FMeshBatchElement
 	// (기본값으로 흰색(1,1,1,1)을 설정하는 것이 일반적입니다.)
 	FLinearColor InstanceColor = FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
+	// 이 배치가 스키닝을 사용하는지 여부입니다.
+	// 기본값은 false로 하여 기존 StaticMesh 렌더링에 영향을 주지 않도록 합니다.
+	bool bIsSkinned = false;
+
+	// 스키닝에 사용될 뼈 변환 행렬의 배열입니다.
+	TArray<FMatrix> BoneTransforms;
+
 	// --- 기본 생성자 ---
 	FMeshBatchElement() = default;
 

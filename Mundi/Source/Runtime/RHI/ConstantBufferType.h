@@ -23,6 +23,22 @@ struct DecalBufferType
     float Opacity;
 };
 
+// b9 in VS
+struct SkinningBufferType
+{
+    FMatrix BoneTransforms[128];
+    
+    SkinningBufferType() = default;
+    SkinningBufferType(const TArray<FMatrix>& InTransforms)
+    {
+        const int32 NumToCopy = FMath::Min(InTransforms.Num(), 128);
+        for (int32 i = 0; i < NumToCopy; ++i)
+        {
+            BoneTransforms[i] = InTransforms[i];
+        }
+    }
+};
+
 // Fireball material parameters (b6 in PS)
 struct FireballBufferType
 {
@@ -218,6 +234,7 @@ constexpr bool TYPE##IsPS = PS;
 //매크로를 인자로 받고 그 매크로 함수에 버퍼 전달
 #define CONSTANT_BUFFER_LIST(MACRO) \
 MACRO(ModelBufferType)              \
+MACRO(SkinningBufferType)           \
 MACRO(DecalBufferType)              \
 MACRO(FireballBufferType)           \
 MACRO(PostProcessBufferType)        \
@@ -256,6 +273,7 @@ CONSTANT_BUFFER_INFO(DecalBufferType, 6, true, true)
 CONSTANT_BUFFER_INFO(FireballBufferType, 6, false, true)
 CONSTANT_BUFFER_INFO(CameraBufferType, 7, true, true)  // b7, VS+PS (UberLit.hlsl과 일치)
 CONSTANT_BUFFER_INFO(FLightBufferType, 8, true, true)
+CONSTANT_BUFFER_INFO(SkinningBufferType, 9, true, false)
 CONSTANT_BUFFER_INFO(FViewportConstants, 10, true, true)   // 뷰 포트 크기에 따라 전체 화면 복사를 보정하기 위해 설정 (10번 고유번호로 사용)
 CONSTANT_BUFFER_INFO(FTileCullingBufferType, 11, false, true)  // b11, PS only (UberLit.hlsl과 일치)
 CONSTANT_BUFFER_INFO(FPointLightShadowBufferType, 12, true, true)  // b11, VS only
