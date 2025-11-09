@@ -158,11 +158,21 @@ void USkeletalMeshComponent::Serialize(
 {
     Super::Serialize(bInIsLoading, InOutHandle);
 
+    const FString SkeletalMeshKey = "SkeletalMesh";
     const FString MaterialSlotsKey = "MaterialSlots";
 
     if (bInIsLoading) // --- 로드 ---
     {
-        // 1. 로드 전 기존 동적 인스턴스 모두 정리
+        // 1. SkeletalMesh 로드
+        JSON SkeletalMeshJson;
+        if (FJsonSerializer::ReadObject(InOutHandle, SkeletalMeshKey, SkeletalMeshJson, JSON::Make(JSON::Class::Object), false))
+        {
+            // SkeletalMesh를 새로 생성하고 직렬화
+            SkeletalMesh = NewObject<USkeletalMesh>();
+            SkeletalMesh->Serialize(true, SkeletalMeshJson);
+        }
+
+        // 2. 로드 전 기존 동적 인스턴스 모두 정리
         ClearDynamicMaterials();
 
         JSON SlotsArrayJson;
@@ -219,6 +229,15 @@ void USkeletalMeshComponent::Serialize(
     }
     else // --- 저장 ---
     {
+        // 1. SkeletalMesh 저장
+        if (SkeletalMesh)
+        {
+            JSON SkeletalMeshJson = JSON::Make(JSON::Class::Object);
+            SkeletalMesh->Serialize(false, SkeletalMeshJson);
+            InOutHandle[SkeletalMeshKey] = SkeletalMeshJson;
+        }
+
+        // 2. MaterialSlots 저장
         JSON SlotsArrayJson = JSON::Make(JSON::Class::Array);
         for (UMaterialInterface* Mtl : MaterialSlots)
         {
@@ -474,14 +493,20 @@ void USkeletalMeshComponent::DuplicateSubObjects()
     // 현재 'DynamicMaterialInstances'와 'MaterialSlots'는
     // '원본' (에디터 컴포넌트)의 포인터를 얕은 복사한 상태입니다.
 
-    // 원본 MID -> 복사본 MID 매핑 테이블
+    // 1. SkeletalMesh 깊은 복사 (Bone 조작을 위해 필수)
+    if (SkeletalMesh)
+    {
+        SkeletalMesh = static_cast<USkeletalMesh*>(SkeletalMesh->Duplicate());
+    }
+
+    // 2. 원본 MID -> 복사본 MID 매핑 테이블
     TMap<UMaterialInstanceDynamic*, UMaterialInstanceDynamic*> OldToNewMIDMap;
 
-    // 1. 복사본의 MID 소유권 리스트를 비웁니다. (메모리 해제 아님)
+    // 3. 복사본의 MID 소유권 리스트를 비웁니다. (메모리 해제 아님)
     //    이 리스트는 새로운 '복사본 MID'들로 다시 채워질 것입니다.
     DynamicMaterialInstances.Empty();
 
-    // 2. MaterialSlots를 순회하며 MID를 찾습니다.
+    // 4. MaterialSlots를 순회하며 MID를 찾습니다.
     for (int32 i = 0; i < MaterialSlots.Num(); ++i)
     {
         UMaterialInterface* CurrentSlot = MaterialSlots[i];
@@ -498,7 +523,7 @@ void USkeletalMeshComponent::DuplicateSubObjects()
             }
             else
             {
-                // 3. MID를 복제합니다.
+                // 5. MID를 복제합니다.
                 UMaterialInterface* Parent = OldMID->GetParentMaterial();
                 if (!Parent)
                 {
@@ -507,18 +532,18 @@ void USkeletalMeshComponent::DuplicateSubObjects()
                     continue;
                 }
 
-                // 3-1. 새로운 MID (PIE용)를 생성합니다.
+                // 5-1. 새로운 MID (PIE용)를 생성합니다.
                 NewMID = UMaterialInstanceDynamic::Create(Parent);
 
-                // 3-2. 원본(OldMID)의 파라미터를 새 MID로 복사합니다.
+                // 5-2. 원본(OldMID)의 파라미터를 새 MID로 복사합니다.
                 NewMID->CopyParametersFrom(OldMID);
 
-                // 3-3. 이 컴포넌트(복사본)의 소유권 리스트에 새 MID를 추가합니다.
+                // 5-3. 이 컴포넌트(복사본)의 소유권 리스트에 새 MID를 추가합니다.
                 DynamicMaterialInstances.Add(NewMID);
                 OldToNewMIDMap.Add(OldMID, NewMID);
             }
 
-            // 4. MaterialSlots가 원본(OldMID) 대신 새 복사본(NewMID)을 가리키도록 교체합니다.
+            // 6. MaterialSlots가 원본(OldMID) 대신 새 복사본(NewMID)을 가리키도록 교체합니다.
             MaterialSlots[i] = NewMID;
         }
         // else (원본 UMaterial 애셋인 경우)

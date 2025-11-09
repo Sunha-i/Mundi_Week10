@@ -64,7 +64,42 @@ FFbxManager& FFbxManager::GetInstance()
 
 void FFbxManager::Preload()
 {
-    ;
+    const fs::path FbxDir(GFbxDataDir);
+
+    if (!fs::exists(FbxDir) || !fs::is_directory(FbxDir))
+    {
+        UE_LOG("FFbxManager::Preload: FBX directory not found: %s", FbxDir.string().c_str());
+        return;
+    }
+
+    size_t LoadedCount = 0;
+    std::unordered_set<FString> ProcessedFiles; // 중복 로딩 방지
+
+    for (const auto& Entry : fs::recursive_directory_iterator(FbxDir))
+    {
+        if (!Entry.is_regular_file())
+            continue;
+
+        const fs::path& Path = Entry.path();
+        FString Extension = Path.extension().string();
+        std::transform(Extension.begin(), Extension.end(), Extension.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (Extension == ".fbx")
+        {
+            FString PathStr = NormalizePath(Path.string());
+
+            // 이미 처리된 파일인지 확인
+            if (ProcessedFiles.find(PathStr) == ProcessedFiles.end())
+            {
+                ProcessedFiles.insert(PathStr);
+                LoadFbxSkeletalMeshAsset(PathStr);
+                ++LoadedCount;
+            }
+        }
+    }
+
+    UE_LOG("FFbxManager::Preload: Loaded %zu .fbx files from %s", LoadedCount, FbxDir.string().c_str());
 }
 
 void FFbxManager::Clear()
