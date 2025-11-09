@@ -24,13 +24,16 @@ struct FSkeletalMesh
 	FString PathFileName;
 	FString CacheFilePath;	// Cached source path (ex: DerivedDataCache/character.skm.bin)
 
-	TArray<FSkinnedVertex> Vertices;
+	TArray<FSkinnedVertex> Vertices;		// Bind pose
+	TArray<FSkinnedVertex> SkinnedVertices;	// CPU skinning result
 	TArray<uint32> Indices;
 	TArray<FBoneInfo> Bones;
 	TArray<FGroupInfo> GroupInfos;
 
 	bool bHasSkinning = false;
 	bool bHasNormals = false;
+
+	void UpdateSkinnedVertices();
 
 	friend FArchive& operator<<(FArchive& Ar, FSkeletalMesh& Mesh)
 	{
