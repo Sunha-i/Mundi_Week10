@@ -527,6 +527,9 @@
     <ClCompile Include="Source\Editor\FbxManager.cpp">
       <Filter>Source\Editor</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\GameFramework\SkeletalMeshActor.cpp">
+      <Filter>Source\Runtime\Engine\GameFramework</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -1141,6 +1144,9 @@
     </ClInclude>
     <ClInclude Include="Source\Editor\FbxManager.h">
       <Filter>Source\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\GameFramework\SkeletalMeshActor.h">
+      <Filter>Source\Runtime\Engine\GameFramework</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

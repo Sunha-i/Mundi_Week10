@@ -72,6 +72,8 @@ public:
 	void SetSkeletalMeshAsset(FSkeletalMesh* InSkeletalMesh) { SkeletalMeshAsset = InSkeletalMesh; }
 	FSkeletalMesh* GetSkeletalMeshAsset() const { return SkeletalMeshAsset; }
 
+	const FString& GetCacheFilePath() const { return CacheFilePath; }
+
 private:
 	void CreateVertexBuffer(FSkeletalMesh* InStaticMesh, ID3D11Device* InDevice, EVertexLayoutType InVertexType);
 	void CreateIndexBuffer(FSkeletalMesh* InStaticMesh, ID3D11Device* InDevice);

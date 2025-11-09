@@ -15,6 +15,7 @@ enum class EPropertyType : uint8
 	Struct,
 	Texture,        // UTexture* 타입 (리소스 선택 UI)
 	StaticMesh,     // UStaticMesh* 타입 (리소스 선택 UI)
+	SkeletalMesh,	// USkeletalMesh* 타입 (리소스 선택 UI)
 	Material,		// UMaterial* 타입 (리소스 선택 UI)
 	Array,			// TArray 용으로 추가
 	SRV,
