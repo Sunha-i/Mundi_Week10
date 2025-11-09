@@ -19,8 +19,12 @@ public:
 
 	void CollectMeshBatches(TArray<FMeshBatchElement>& OutMeshBatchElements, const FSceneView* View) override;
 
+	UMaterialInterface* GetMaterial(uint32 InSectionIndex) const override;
+	void SetMaterial(uint32 InElementIndex, UMaterialInterface* InNewMaterial) override;
+
 protected:
 	void MarkWorldPartitionDirty();
 
 	USkeletalMesh* SkeletalMesh = nullptr;
+	TArray<UMaterialInterface*> MaterialSlots;
 };

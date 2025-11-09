@@ -23,6 +23,7 @@ struct FFBXMeshData
 	TArray<int> BoneIndices;
 	TArray<float> BoneWeights;
 	TArray<uint32> Indices;
+	TArray<FGroupInfo> GroupInfos;
 };
 
 struct FFBXSkeletonData
@@ -44,12 +45,13 @@ public:
 		const FString& FilePath, 
 		FSkeletalMesh* OutMesh,
 		FFBXSkeletonData* OutSkeleton, 
+		TArray<FMaterialInfo>& OutMaterialInfos,
 		const FFBXImportOptions& Options = FFBXImportOptions()
 	);
 
 private:
 	static void ParseSkeleton(FbxNode* Root, FFBXSkeletonData& OutSkeleton);
-	static void ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData);
+	static void ParseMesh(FbxNode* InNode, FbxMesh* Mesh, FFBXMeshData& OutMeshData);
 };
 
 class FFbxManager

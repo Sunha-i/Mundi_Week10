@@ -18,7 +18,7 @@ static inline FMatrix FbxAMatrixToFMatrix(const FbxAMatrix& A)
 	);
 }
 
-bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FFBXSkeletonData* OutSkeleton, const FFBXImportOptions& Options)
+bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FFBXSkeletonData* OutSkeleton, TArray<FMaterialInfo>& OutMaterialInfos, const FFBXImportOptions& Options)
 {
 	FbxManager* SDKManager = FbxManager::Create();
 	FbxIOSettings* IOSettings = FbxIOSettings::Create(SDKManager, IOSROOT);
@@ -62,10 +62,10 @@ bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FF
 		return false;
 	}
 
-	// 스켈레톤 파싱
+	// Skeleton Parsing
 	ParseSkeleton(RootNode, *OutSkeleton);
 
-	// 메시 데이터 파싱
+	// Mesh Data Parsing
 	for (int i = 0; i < RootNode->GetChildCount(); ++i)
 	{
 		FbxNode* Child = RootNode->GetChild(i);
@@ -75,12 +75,13 @@ bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FF
 		if (!Mesh) continue;
 
 		FFBXMeshData MeshData;
-		ParseMesh(Mesh, MeshData);
+		ParseMesh(Child, Mesh, MeshData);
 
 		// OutMesh는 이미 생성된 FSkeletalMesh*
 		OutMesh->PathFileName = FilePath;
 		OutMesh->bHasSkinning = true;
 		OutMesh->bHasNormals = MeshData.Normals.Num() > 0;
+		OutMesh->GroupInfos = MeshData.GroupInfos;
 
 		// Vertex 변환
 		OutMesh->Vertices.reserve(MeshData.Positions.Num());
@@ -89,7 +90,15 @@ bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FF
 			FSkinnedVertex Vtx{};
 			Vtx.Position = MeshData.Positions[v];
 			Vtx.Normal = (v < MeshData.Normals.Num()) ? MeshData.Normals[v] : FVector(0, 0, 1);
-			Vtx.TexCoord = FVector2D(0, 0);
+			
+			if (v < MeshData.TexCoords.Num())
+			{
+				Vtx.TexCoord = MeshData.TexCoords[v];
+			}
+			else
+			{
+				Vtx.TexCoord = FVector2D(0, 0);
+			}
 
 			for (int i = 0; i < 4; ++i)
 			{
@@ -109,6 +118,48 @@ bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FF
 		OutMesh->Bones = OutSkeleton->Bones;
 
 		break; // 한 Mesh만 처리
+	}
+
+	for (int i = 0; i < RootNode->GetChildCount(); ++i)
+	{
+		FbxNode* Child = RootNode->GetChild(i);
+		if (!Child || !Child->GetMesh())	continue;
+
+		for (int j = 0; j < Child->GetMaterialCount(); ++j)
+		{
+			FbxSurfaceMaterial* FbxMaterial = Child->GetMaterial(j);
+			if (!FbxMaterial)	continue;
+
+			FMaterialInfo MatInfo;
+			MatInfo.MaterialName = FbxMaterial->GetName();
+
+			FbxProperty DiffuseProp = FbxMaterial->FindProperty(FbxSurfaceMaterial::sDiffuse);
+			if (DiffuseProp.IsValid() && DiffuseProp.GetSrcObjectCount<FbxFileTexture>() > 0)
+			{
+				FbxFileTexture* FbxTexture = DiffuseProp.GetSrcObject<FbxFileTexture>(0);
+				if (FbxTexture)
+				{
+					// Since a .fbm folder is created in the same path as the FBX file for extracted textures,
+					// we only retrieve and use the 'file name' of the texture, not the full path.
+					/*const char* FullPath = FbxTexture->GetFileName();
+					FString TextureFileName = std::filesystem::path(FullPath).filename().string();
+					MatInfo.DiffuseTextureFileName = TextureFileName;*/
+
+					const char* FullPath = FbxTexture->GetFileName();
+					FString TextureFileName = std::filesystem::path(FullPath).filename().string();
+					
+					// .fbm 폴더 안의 텍스처를 가리키는 전체 경로 생성
+					std::filesystem::path FbxPath(FilePath);
+					std::filesystem::path FbmFolder = FbxPath.parent_path() / (FbxPath.stem().string() + ".fbm");
+					std::filesystem::path FullTexturePath = FbmFolder / TextureFileName;
+					
+					// '파일 이름'이 아닌 '전체 경로'를 저장합니다.
+					MatInfo.DiffuseTextureFileName = NormalizePath(FullTexturePath.string());
+				}
+			}
+			OutMaterialInfos.Add(MatInfo);
+		}
+		break;
 	}
 
 	SDKManager->Destroy();
@@ -147,7 +198,7 @@ void FFBXImporter::ParseSkeleton(FbxNode* Root, FFBXSkeletonData& OutSkeleton)
 	Traverse(Root, -1);
 }
 
-void FFBXImporter::ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData)
+void FFBXImporter::ParseMesh(FbxNode* InNode, FbxMesh* Mesh, FFBXMeshData& OutMeshData)
 {
 	if (!Mesh)	return;
 
@@ -184,34 +235,155 @@ void FFBXImporter::ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData)
 		}
 	}
 
-	// 3) Index
-	const int PolygonCount = Mesh->GetPolygonCount();
-	OutMeshData.Indices.Reserve(PolygonCount * 4);	// Assuming quads on average
-
-	for (int i = 0; i < PolygonCount; ++i)
+	// 3) TexCoords (if exists)
+	if (Mesh->GetElementUVCount() > 0)
 	{
-		const int VertCount = Mesh->GetPolygonSize(i);
-		if (VertCount < 3)
+		FbxLayerElementUV* UVElement = Mesh->GetElementUV(0);
+		if (UVElement)
 		{
-			continue;	// Ignore point or line
+			const int ControlPointCount = Mesh->GetControlPointsCount();
+			OutMeshData.TexCoords.SetNum(ControlPointCount);
+
+			if (UVElement->GetMappingMode() == FbxLayerElement::eByControlPoint)
+			{
+				if (UVElement->GetReferenceMode() == FbxLayerElement::eDirect)
+				{
+					for (int i = 0; i < ControlPointCount; ++i)
+					{
+						FbxVector2 uv = UVElement->GetDirectArray().GetAt(i);
+						OutMeshData.TexCoords[i] = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
+					}
+				}
+				else if (UVElement->GetReferenceMode() == FbxLayerElement::eIndexToDirect)
+				{
+					for (int i = 0; i < ControlPointCount; ++i)
+					{
+						int id = UVElement->GetIndexArray().GetAt(i);
+						FbxVector2 uv = UVElement->GetDirectArray().GetAt(id);
+						OutMeshData.TexCoords[i] = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
+					}
+				}
+			}
+			else  // Other modes (like eByPolygonVertex) are complex to map directly to the FSkinnedVertex struct for now
+			{
+				UE_LOG("Unsupported UV mapping mode for skeletal mesh: %d", UVElement->GetMappingMode());
+				for (int i = 0; i < ControlPointCount; ++i)
+				{
+					OutMeshData.TexCoords[i] = FVector2D(0, 0);
+				}
+			}
 		}
-
-		// Fan Triangulation
-		// Triangulates a polygon with N vertices into (N-2) triangles.
-		// ex: (v0, v1, v2), (v0, v2, v3), ...
-		int v0 = Mesh->GetPolygonVertex(i, 0);
-		for (int j = 1; j < VertCount - 1; ++j)
+	}
+	else  // No UV info
+	{
+		const int ControlPointCount = Mesh->GetControlPointsCount();
+		OutMeshData.TexCoords.SetNum(ControlPointCount);
+		for (int i = 0; i < ControlPointCount; ++i)
 		{
-			int v1 = Mesh->GetPolygonVertex(i, j);
-			int v2 = Mesh->GetPolygonVertex(i, j + 1);
-
-			OutMeshData.Indices.Add(v0);
-			OutMeshData.Indices.Add(v1);
-			OutMeshData.Indices.Add(v2);
+			OutMeshData.TexCoords[i] = FVector2D(0, 0);
 		}
 	}
 
-	// 4) Skin/Bone weight
+	// 4) Index & Material Grouping
+	FbxLayerElementMaterial* MaterialElement = Mesh->GetLayer(0)->GetMaterials();
+	const bool bHasMaterials = (MaterialElement != nullptr);
+	const int PolygonCount = Mesh->GetPolygonCount();
+
+	if (bHasMaterials && MaterialElement->GetMappingMode() == FbxLayerElement::eByPolygon)
+	{
+		TArray<TArray<int32>> SubMeshes;
+		SubMeshes.SetNum(InNode->GetMaterialCount());
+
+		for (int i = 0; i < PolygonCount; ++i)
+		{
+			const int MaterialIndex = MaterialElement->GetIndexArray().GetAt(i);
+			const int VertCount = Mesh->GetPolygonSize(i);
+			if (VertCount < 3)
+			{
+				continue;	// Ignore point or line
+			}
+
+			// Fan Triangulation
+			// Triangulates a polygon with N vertices into (N-2) triangles.
+			// ex: (v0, v1, v2), (v0, v2, v3), ...
+			int v0 = Mesh->GetPolygonVertex(i, 0);
+			for (int j = 1; j < VertCount - 1; ++j)
+			{
+				int v1 = Mesh->GetPolygonVertex(i, j);
+				int v2 = Mesh->GetPolygonVertex(i, j + 1);
+
+				SubMeshes[MaterialIndex].Add(v0);
+				SubMeshes[MaterialIndex].Add(v1);
+				SubMeshes[MaterialIndex].Add(v2);
+			}
+		}
+
+		// Merge grouped indices into OutMeshData.Indices and generate GroupInfo
+		OutMeshData.Indices.Empty();
+		OutMeshData.GroupInfos.Empty();
+		for (int i = 0; i < SubMeshes.Num(); ++i)
+		{
+			if (SubMeshes[i].IsEmpty())	continue;
+
+			FGroupInfo Group;
+			Group.StartIndex = OutMeshData.Indices.Num();
+			Group.IndexCount = SubMeshes[i].Num();
+
+			FbxSurfaceMaterial* FbxMaterial = InNode->GetMaterial(i);
+			if (FbxMaterial)
+			{
+				Group.InitialMaterialName = FbxMaterial->GetName();
+			}
+
+			for (int32 Index : SubMeshes[i])
+			{
+				OutMeshData.Indices.Add(static_cast<uint32>(Index));
+			}
+			OutMeshData.GroupInfos.Add(Group);
+		}
+	}
+	else  // no material info exists, or assignment method is not 'per-polygon' (ex. eAllSame mode)
+	{
+		OutMeshData.Indices.Reserve(PolygonCount * 4);	// Assuming quads on average
+		for (int i = 0; i < PolygonCount; ++i)
+		{
+			const int VertCount = Mesh->GetPolygonSize(i);
+			if (VertCount < 3) continue;
+			int v0 = Mesh->GetPolygonVertex(i, 0);
+			for (int j = 1; j < VertCount - 1; ++j)
+			{
+				int v1 = Mesh->GetPolygonVertex(i, j);
+				int v2 = Mesh->GetPolygonVertex(i, j + 1);
+				OutMeshData.Indices.Add(v0);
+				OutMeshData.Indices.Add(v1);
+				OutMeshData.Indices.Add(v2);
+			}
+		}
+
+		if (!OutMeshData.Indices.IsEmpty())
+		{
+			FGroupInfo Group;
+			Group.StartIndex = 0;
+			Group.IndexCount = OutMeshData.Indices.Num();
+
+			if (bHasMaterials && InNode->GetMaterialCount() > 0)
+			{
+				FbxSurfaceMaterial* FbxMaterial = InNode->GetMaterial(0);
+				if (FbxMaterial)
+				{
+					Group.InitialMaterialName = FbxMaterial->GetName();
+					UE_LOG("Mesh has one material (e.g., eAllSame mode): %s", Group.InitialMaterialName.c_str());
+				}
+			}
+			else
+			{
+				UE_LOG("Mesh has no material information, will use default.");
+			}
+			OutMeshData.GroupInfos.Add(Group);
+		}
+	}
+
+	// 5) Skin/Bone weight
 	const int DeformerCount = Mesh->GetDeformerCount(FbxDeformer::eSkin);
 	if (DeformerCount > 0)
 	{
@@ -371,6 +543,7 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 
 	// 3. 캐시 데이터 로드 시도 및 실패 시 재생성 로직
 	FSkeletalMesh* NewSkeletalMesh = new FSkeletalMesh();
+	TArray<FMaterialInfo> MaterialInfos;
 	bool bLoadedSuccessfully = false;
 
 	// 캐시가 오래되었는지 먼저 확인
@@ -403,6 +576,7 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 	}
 #else
 	FSkeletalMesh* NewSkeletalMesh = new FSkeletalMesh();
+	TArray<FMaterialInfo> MaterialInfos;
 	bool bLoadedSuccessfully = false;
 #endif
 
@@ -415,7 +589,7 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 		// FBX Import
 		FFBXSkeletonData OutSkeleton;
 		FFBXImportOptions Options;
-		if (!FFBXImporter::ImportFBX(NormalizedPathStr, NewSkeletalMesh, &OutSkeleton, Options))
+		if (!FFBXImporter::ImportFBX(NormalizedPathStr, NewSkeletalMesh, &OutSkeleton, MaterialInfos, Options))
 		{
 			UE_LOG("Failed to import FBX: %s", NormalizedPathStr.c_str());
 			delete NewSkeletalMesh;
@@ -436,6 +610,24 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 			UE_LOG("Failed to write FBX cache: %s", e.what());
 		}
 #endif
+	}
+
+	UShader* DefaultUberlitShader = nullptr;
+	UMaterial* DefaultMaterial = UResourceManager::GetInstance().GetDefaultMaterial();
+	if (DefaultMaterial)
+	{
+		DefaultUberlitShader = DefaultMaterial->GetShader();
+	}
+
+	for (const FMaterialInfo& MatInfo : MaterialInfos)
+	{
+		if (!UResourceManager::GetInstance().Get<UMaterial>(MatInfo.MaterialName))
+		{
+			UMaterial* NewMaterial = NewObject<UMaterial>();
+			NewMaterial->SetMaterialInfo(MatInfo);
+			NewMaterial->SetShader(DefaultUberlitShader);
+			UResourceManager::GetInstance().Add<UMaterial>(MatInfo.MaterialName, NewMaterial);
+		}
 	}
 
 	// 5. 로드 완료 로그

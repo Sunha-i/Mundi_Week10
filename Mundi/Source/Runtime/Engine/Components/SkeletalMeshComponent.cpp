@@ -9,6 +9,7 @@ IMPLEMENT_CLASS(USkeletalMeshComponent)
 BEGIN_PROPERTIES(USkeletalMeshComponent)
 	MARK_AS_COMPONENT("스켈레탈 메시 컴포넌트", "스켈레탈 메시를 렌더링하는 컴포넌트입니다.")
 	ADD_PROPERTY_SKELETALMESH(USkeletalMesh*, SkeletalMesh, "Skeletal Mesh", true)
+	ADD_PROPERTY_ARRAY(EPropertyType::Material, MaterialSlots, "Materials", true)
 END_PROPERTIES()
 
 USkeletalMeshComponent::USkeletalMeshComponent()
@@ -27,12 +28,20 @@ void USkeletalMeshComponent::SetSkeletalMesh(const FString& PathFileName)
 		if (SkeletalMesh != NewSkeletalMesh)
 		{
 			SkeletalMesh = NewSkeletalMesh;
+			
+			const TArray<FGroupInfo>& GroupInfos = SkeletalMesh->GetMeshGroupInfo();
+			MaterialSlots.resize(GroupInfos.size());
+			for (int i = 0; i < GroupInfos.size(); ++i)
+			{
+				SetMaterialByName(i, GroupInfos[i].InitialMaterialName);
+			}
 			MarkWorldPartitionDirty();
 		}
 	}
 	else
 	{
 		SkeletalMesh = nullptr;
+		MaterialSlots.Empty();
 		MarkWorldPartitionDirty();
 	}
 }
@@ -46,8 +55,21 @@ void USkeletalMeshComponent::CollectMeshBatches(TArray<FMeshBatchElement>& OutMe
 
 	auto DetermineMaterialAndShader = [&](uint32 SectionIndex) ->TPair<UMaterialInterface*, UShader*>
 	{
-		UMaterialInterface* Material = UResourceManager::GetInstance().GetDefaultMaterial();
-		UShader* Shader = Material ? Material->GetShader() : nullptr;
+		UMaterialInterface* Material = GetMaterial(SectionIndex);
+		UShader* Shader = nullptr;
+
+		if (Material && Material->GetShader())
+		{
+			Shader = Material->GetShader();
+		}
+		else
+		{
+			Material = UResourceManager::GetInstance().GetDefaultMaterial();
+			if (Material)
+			{
+				Shader = Material->GetShader();
+			}
+		}
 
 		if (!Material || !Shader)
 		{
@@ -140,6 +162,24 @@ void USkeletalMeshComponent::CollectMeshBatches(TArray<FMeshBatchElement>& OutMe
 
 		OutMeshBatchElements.Add(BatchElement);
 	}
+}
+
+UMaterialInterface* USkeletalMeshComponent::GetMaterial(uint32 InSectionIndex) const
+{
+	if (MaterialSlots.size() <= InSectionIndex)
+	{
+		return nullptr;
+	}
+	return MaterialSlots[InSectionIndex];
+}
+
+void USkeletalMeshComponent::SetMaterial(uint32 InElementIndex, UMaterialInterface* InNewMaterial)
+{
+	if (InElementIndex >= static_cast<uint32>(MaterialSlots.Num()))
+	{
+		return;
+	}
+	MaterialSlots[InElementIndex] = InNewMaterial;
 }
 
 void USkeletalMeshComponent::MarkWorldPartitionDirty()

@@ -170,7 +170,7 @@ bool GetMtlDependencies(const FString& ObjPath, TArray<FString>& OutMtlFilePaths
  * @param MatBinPath 머티리얼 데이터 캐시(.mtl.bin) 파일의 경로입니다.
  * @return 캐시를 다시 생성해야 하면 true, 캐시가 유효하면 false를 반환합니다.
  */
-bool ShouldRegenerateCache(const FString& ObjPath, const FString& BinPath, const FString& MatBinPath)
+static bool ShouldRegenerateCache(const FString& ObjPath, const FString& BinPath, const FString& MatBinPath)
 {
 	// 캐시 파일 중 하나라도 존재하지 않으면 무조건 재생성해야 합니다.
 	if (!fs::exists(BinPath) || !fs::exists(MatBinPath))
