@@ -137,32 +137,9 @@ struct PS_OUTPUT
 PS_INPUT mainVS(VS_INPUT Input)
 {
     PS_INPUT Out;
-    
-    float4 modelPosition;
-    float3 modelNormal;
-    
-#if SKINNED
-    float4 skinnedPosition = float4(0, 0, 0, 0);
-    float3 skinnedNormal = float3(0, 0, 0);
-    
-    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.x]) * Input.BoneWeights.x;
-    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.x]) * Input.BoneWeights.x;
-    
-    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.y]) * Input.BoneWeights.y;
-    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.y]) * Input.BoneWeights.y;
-    
-    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.z]) * Input.BoneWeights.z;
-    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.z]) * Input.BoneWeights.z;
-    
-    skinnedPosition += mul(float4(Input.Position, 1.0f), BoneTransforms[Input.BoneIndices.w]) * Input.BoneWeights.w;
-    skinnedNormal += mul(Input.Normal, (float3x3) BoneTransforms[Input.BoneIndices.w]) * Input.BoneWeights.w;
 
-    modelPosition = skinnedPosition;
-    modelNormal = normalize(skinnedNormal);
-#else
-    modelPosition = float4(Input.Position, 1.0f);
-    modelNormal = Input.Normal;
-#endif
+    float4 modelPosition = float4(Input.Position, 1.0f);
+    float3 modelNormal = Input.Normal;
     
     // 위치를 월드 공간으로 먼저 변환
     float4 worldPos = mul(modelPosition, WorldMatrix);

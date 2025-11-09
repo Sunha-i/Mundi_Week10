@@ -34,6 +34,24 @@ bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FF
 
 	FbxScene* Scene = FbxScene::Create(SDKManager, "Scene");
 	Importer->Import(Scene);
+
+	// Coordinate System Conversion
+	// Define the engine's coordinate system (Z-up, X-Forward, Left-Handed)
+	FbxAxisSystem EngineAxisSystem(FbxAxisSystem::eZAxis, FbxAxisSystem::eParityOdd, FbxAxisSystem::eLeftHanded);
+	FbxAxisSystem SceneAxisSystem = Scene->GetGlobalSettings().GetAxisSystem();
+	if (SceneAxisSystem != EngineAxisSystem)
+	{
+		EngineAxisSystem.ConvertScene(Scene);
+	}
+
+	// Unit Conversion
+	// Convert FBX scene units to centimeters, assuming the engine operates in cm.
+	FbxSystemUnit EngineSystemUnit = FbxSystemUnit::cm;
+	if (Scene->GetGlobalSettings().GetSystemUnit() != EngineSystemUnit)
+	{
+		EngineSystemUnit.ConvertScene(Scene);
+	}
+
 	Importer->Destroy();
 
 	FbxNode* RootNode = Scene->GetRootNode();
