@@ -18,7 +18,7 @@ public:
     USkeletalMeshComponent* GetSkeletalMeshComponent() const { return SkeletalMeshComponent; }
     void SetSkeletalMeshComponent(USkeletalMeshComponent* InSkeletalMeshComponent);
 
-    // ───── 복사 관련 ────────────────────────────
+    // Duplicate
     void DuplicateSubObjects() override;
     DECLARE_DUPLICATE(ASkeletalMeshActor)
 

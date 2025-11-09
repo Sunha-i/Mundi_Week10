@@ -6,14 +6,13 @@
 #include "ShapeComponent.h"
 
 IMPLEMENT_CLASS(ASkeletalMeshActor)
-
 BEGIN_PROPERTIES(ASkeletalMeshActor)
     MARK_AS_SPAWNABLE("스켈레탈 메시", "스켈레탈 메시를 렌더링하는 액터입니다.")
 END_PROPERTIES()
 
 ASkeletalMeshActor::ASkeletalMeshActor()
 {
-    ObjectName = "Static Mesh Actor";
+    ObjectName = "Skeletal Mesh Actor";
     SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>("SkeletalMeshComponent");
     
     // 루트 교체

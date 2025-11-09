@@ -39,6 +39,7 @@ private:
 	static bool RenderPointLightCubeShadowMap(class FLightManager* LightManager, class ULightComponent* LightComp, int32 CubeSliceIndex);
 	static bool RenderSpotLightShadowMap(class FLightManager* LightManager, class ULightComponent* LightComp, ID3D11ShaderResourceView* AtlasSRV);
 	static bool RenderStaticMeshProperty(const FProperty& Prop, void* Instance);
+	static bool RenderSkeletalMeshProperty(const FProperty& Prop, void* Instance);
 	static bool RenderMaterialProperty(const FProperty& Prop, void* Instance);
 	static bool RenderMaterialArrayProperty(const FProperty& Prop, void* Instance);
 	static bool RenderSingleMaterialSlot(const char* Label, UMaterialInterface** MaterialPtr, UObject* OwningObject, uint32 MaterialIndex);	// 단일 UMaterial* 슬롯을 렌더링하는 헬퍼 함수.
@@ -58,6 +59,8 @@ private:
 	// 렌더링 중 캐시되는 리소스 목록
 	static TArray<FString> CachedStaticMeshPaths;
 	static TArray<const char*> CachedStaticMeshItems;
+	static TArray<FString> CachedSkeletalMeshPaths;
+	static TArray<const char*> CachedSkeletalMeshItems;
 	static TArray<FString> CachedMaterialPaths;
 	static TArray<const char*> CachedMaterialItems;
 	static TArray<FString> CachedShaderPaths;
