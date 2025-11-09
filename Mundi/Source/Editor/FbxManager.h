@@ -34,7 +34,7 @@ struct FFBXSkeletonData
 		FMatrix BindPose;
 		FMatrix InverseBindPose;
 	};
-	TArray<FBone> Bones;
+	TArray<FBoneInfo> Bones;
 };
 
 class FFBXImporter
@@ -42,7 +42,7 @@ class FFBXImporter
 public:
 	static bool ImportFBX(
 		const FString& FilePath, 
-		USkeletalMesh* OutMesh,
+		FSkeletalMesh* OutMesh,
 		FFBXSkeletonData* OutSkeleton, 
 		const FFBXImportOptions& Options = FFBXImportOptions()
 	);

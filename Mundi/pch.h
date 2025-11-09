@@ -4,6 +4,7 @@
 // Uncomment to enable DDS texture caching (faster loading, uses Data/TextureCache/)
 #define USE_DDS_CACHE
 #define USE_OBJ_CACHE
+#define USE_FBX_CACHE
 
 #define IMGUI_DEFINE_MATH_OPERATORS	// Imgui에서 곡선 표시를 위한 전용 벡터 연산자 활성화
 

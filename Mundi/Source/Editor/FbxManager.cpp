@@ -1,6 +1,8 @@
 ﻿#include "pch.h"
 #include "FbxManager.h"
 #include "ObjectIterator.h"
+#include "WindowsBinReader.h"
+#include "WindowsBinWriter.h"
 
 TMap<FString, FSkeletalMesh*> FFbxManager::CachedAssets;
 TMap<FString, USkeletalMesh*> FFbxManager::CachedResources;
@@ -16,17 +18,17 @@ static inline FMatrix FbxAMatrixToFMatrix(const FbxAMatrix& A)
 	);
 }
 
-bool FFBXImporter::ImportFBX(const FString& FilePath, USkeletalMesh* OutMesh, FFBXSkeletonData* OutSkeleton, const FFBXImportOptions& Options)
+bool FFBXImporter::ImportFBX(const FString& FilePath, FSkeletalMesh* OutMesh, FFBXSkeletonData* OutSkeleton, const FFBXImportOptions& Options)
 {
 	FbxManager* SDKManager = FbxManager::Create();
 	FbxIOSettings* IOSettings = FbxIOSettings::Create(SDKManager, IOSROOT);
 	SDKManager->SetIOSettings(IOSettings);
 
 	FbxImporter* Importer = FbxImporter::Create(SDKManager, "");
-
 	if (!Importer->Initialize(FilePath.c_str(), -1, SDKManager->GetIOSettings()))
 	{
 		UE_LOG("FBX Import Failed: %s\n", Importer->GetStatus().GetErrorString());
+		SDKManager->Destroy();
 		return false;
 	}
 
@@ -38,21 +40,57 @@ bool FFBXImporter::ImportFBX(const FString& FilePath, USkeletalMesh* OutMesh, FF
 	if (!RootNode)
 	{
 		UE_LOG("FBX has no root node\n");
+		SDKManager->Destroy();
 		return false;
 	}
 
+	// 스켈레톤 파싱
 	ParseSkeleton(RootNode, *OutSkeleton);
 
+	// 메시 데이터 파싱
 	for (int i = 0; i < RootNode->GetChildCount(); ++i)
 	{
 		FbxNode* Child = RootNode->GetChild(i);
+		if (!Child) continue;
+
 		FbxMesh* Mesh = Child->GetMesh();
-		if (Mesh)
+		if (!Mesh) continue;
+
+		FFBXMeshData MeshData;
+		ParseMesh(Mesh, MeshData);
+
+		// OutMesh는 이미 생성된 FSkeletalMesh*
+		OutMesh->PathFileName = FilePath;
+		OutMesh->bHasSkinning = true;
+		OutMesh->bHasNormals = MeshData.Normals.Num() > 0;
+
+		// Vertex 변환
+		OutMesh->Vertices.reserve(MeshData.Positions.Num());
+		for (int v = 0; v < MeshData.Positions.Num(); ++v)
 		{
-			FFBXMeshData MeshData;
-			ParseMesh(Mesh, MeshData);
-			//OutMesh->SetFromImportData(MeshData, *OutSkeleton);
+			FSkinnedVertex Vtx{};
+			Vtx.Position = MeshData.Positions[v];
+			Vtx.Normal = (v < MeshData.Normals.Num()) ? MeshData.Normals[v] : FVector(0, 0, 1);
+			Vtx.TexCoord = FVector2D(0, 0);
+
+			for (int i = 0; i < 4; ++i)
+			{
+				int idx = v * 4 + i;
+				if (idx < MeshData.BoneIndices.Num())
+				{
+					Vtx.BoneIndices[i] = MeshData.BoneIndices[idx];
+					Vtx.BoneWeights[i] = MeshData.BoneWeights[idx];
+				}
+			}
+
+			OutMesh->Vertices.push_back(Vtx);
 		}
+
+		// 인덱스 & 본 복사
+		OutMesh->Indices = MeshData.Indices;
+		OutMesh->Bones = OutSkeleton->Bones;
+
+		break; // 한 Mesh만 처리
 	}
 
 	SDKManager->Destroy();
@@ -70,13 +108,13 @@ void FFBXImporter::ParseSkeleton(FbxNode* Root, FFBXSkeletonData& OutSkeleton)
 		FbxSkeleton* Skeleton = Node->GetSkeleton();
 		if (Skeleton)
 		{
-			FFBXSkeletonData::FBone Bone;
+			FBoneInfo Bone;
 			Bone.Name = Node->GetName();
 			Bone.ParentIndex = ParentIndex;
 
 			FbxAMatrix BindPose = Node->EvaluateGlobalTransform();
 			Bone.BindPose = FbxAMatrixToFMatrix(BindPose);
-			Bone.InverseBindPose = FbxAMatrixToFMatrix(BindPose.Inverse());
+			Bone.InverseBindpose = FbxAMatrixToFMatrix(BindPose.Inverse());
 
 			int BoneIndex = OutSkeleton.Bones.Num();
 			OutSkeleton.Bones.Add(Bone);
@@ -178,6 +216,36 @@ void FFBXImporter::ParseMesh(FbxMesh* Mesh, FFBXMeshData& OutMeshData)
 	}
 }
 
+bool ShouldRegenerateCache(const FString& FbxPath, const FString& BinPath)
+{
+	namespace fs = std::filesystem;
+
+	// 캐시 파일이 없으면 무조건 재생성
+	if (!fs::exists(BinPath))
+	{
+		return true;
+	}
+
+	try
+	{
+		auto BinTimestamp = fs::last_write_time(BinPath);
+
+		// 원본 FBX가 더 최신이면 캐시 무효
+		if (fs::exists(FbxPath) && fs::last_write_time(FbxPath) > BinTimestamp)
+		{
+			return true;
+		}
+	}
+	catch (const fs::filesystem_error& e)
+	{
+		UE_LOG("Filesystem error during FBX cache validation: %s. Forcing regeneration.", e.what());
+		return true;
+	}
+
+	// 최신 캐시가 유지되고 있으면 그대로 사용
+	return false;
+}
+
 void FFbxManager::Preload()
 {
 	const fs::path DataDir(GDataDir);
@@ -237,7 +305,116 @@ void FFbxManager::Clear()
 
 FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName)
 {
-	return nullptr;
+	FString NormalizedPathStr = NormalizePath(PathFileName);
+
+	// 1. 메모리 캐시 확인: 이미 로드된 에셋이 있으면 즉시 반환합니다.
+	if (FSkeletalMesh** It = CachedAssets.Find(NormalizedPathStr))
+	{
+		return *It;
+	}
+
+	// 2. 파일 경로 설정
+	std::filesystem::path Path(NormalizedPathStr);
+	FString Extension = Path.extension().string();
+	std::transform(Extension.begin(), Extension.end(), Extension.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+	if (Extension != ".fbx")
+	{
+		UE_LOG("this file is not fbx!: %s", NormalizedPathStr.c_str());
+		return nullptr;
+	}
+
+#ifdef USE_FBX_CACHE
+	// 2-1. 캐시 파일 경로 설정
+	FString CachePathStr = ConvertDataPathToCachePath(NormalizedPathStr);
+	const FString BinPathFileName = CachePathStr + ".bin";
+
+	// 캐시를 저장할 디렉토리가 없으면 생성
+	fs::path CacheFileDirPath(BinPathFileName);
+	if (CacheFileDirPath.has_parent_path())
+	{
+		fs::create_directories(CacheFileDirPath.parent_path());
+	}
+
+	// 3. 캐시 데이터 로드 시도 및 실패 시 재생성 로직
+	FSkeletalMesh* NewSkeletalMesh = new FSkeletalMesh();
+	bool bLoadedSuccessfully = false;
+
+	// 캐시가 오래되었는지 먼저 확인
+	bool bShouldRegenerate = ShouldRegenerateCache(NormalizedPathStr, BinPathFileName);
+
+	if (!bShouldRegenerate)
+	{
+		UE_LOG("Attempting to load '%s' from cache.", NormalizedPathStr.c_str());
+		try
+		{
+			FWindowsBinReader Reader(BinPathFileName);
+			if (!Reader.IsOpen())
+				throw std::runtime_error("Failed to open FBX bin file.");
+
+			Reader << *NewSkeletalMesh;
+			Reader.Close();
+
+			NewSkeletalMesh->CacheFilePath = BinPathFileName;
+			bLoadedSuccessfully = true;
+			UE_LOG("Successfully loaded skeletal mesh '%s' from cache.", NormalizedPathStr.c_str());
+		}
+		catch (const std::exception& e)
+		{
+			UE_LOG("Error loading FBX cache: %s", e.what());
+			delete NewSkeletalMesh;
+			NewSkeletalMesh = nullptr;
+			std::filesystem::remove(BinPathFileName);
+			bLoadedSuccessfully = false;
+		}
+	}
+#else
+	FSkeletalMesh* NewSkeletalMesh = new FSkeletalMesh();
+	bool bLoadedSuccessfully = false;
+#endif
+
+	// 4. 캐시 로드 실패 시 새로 생성
+	if (!bLoadedSuccessfully)
+	{
+		if (!NewSkeletalMesh) NewSkeletalMesh = new FSkeletalMesh();
+		UE_LOG("Regenerating FBX cache for '%s'...", NormalizedPathStr.c_str());
+
+		// FBX Import
+		FFBXSkeletonData OutSkeleton;
+		FFBXImportOptions Options;
+		if (!FFBXImporter::ImportFBX(NormalizedPathStr, NewSkeletalMesh, &OutSkeleton, Options))
+		{
+			UE_LOG("Failed to import FBX: %s", NormalizedPathStr.c_str());
+			delete NewSkeletalMesh;
+			return nullptr;
+		}
+
+#ifdef USE_FBX_CACHE
+		// 성공 시 캐시 저장
+		try
+		{
+			FWindowsBinWriter Writer(BinPathFileName);
+			Writer << *NewSkeletalMesh;
+			Writer.Close();
+			UE_LOG("Cache regeneration complete for '%s'.", NormalizedPathStr.c_str());
+		}
+		catch (const std::exception& e)
+		{
+			UE_LOG("Failed to write FBX cache: %s", e.what());
+		}
+#endif
+	}
+
+	// 5. 로드 완료 로그
+	UE_LOG("Loaded skeletal mesh '%s' with %d bones and %d vertices.",
+		NormalizedPathStr.c_str(),
+		static_cast<int>(NewSkeletalMesh->Bones.size()),
+		static_cast<int>(NewSkeletalMesh->Vertices.size()));
+
+	// 6. 메모리 캐시에 등록
+	CachedAssets.Add(NormalizedPathStr, NewSkeletalMesh);
+	return NewSkeletalMesh;
 }
 
 USkeletalMesh* FFbxManager::LoadFbxSkeletalMesh(const FString& PathFileName)

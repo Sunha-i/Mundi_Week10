@@ -69,6 +69,9 @@ public:
 	uint32 GetVertexCount() const { return VertexCount; }
 	uint32 GetIndexCount() const { return IndexCount; }
 
+	void SetSkeletalMeshAsset(FSkeletalMesh* InSkeletalMesh) { SkeletalMeshAsset = InSkeletalMesh; }
+	FSkeletalMesh* GetSkeletalMeshAsset() const { return SkeletalMeshAsset; }
+
 private:
 	void CreateVertexBuffer(FSkeletalMesh* InStaticMesh, ID3D11Device* InDevice, EVertexLayoutType InVertexType);
 	void CreateIndexBuffer(FSkeletalMesh* InStaticMesh, ID3D11Device* InDevice);
