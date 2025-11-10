@@ -1273,7 +1273,7 @@ void FSceneRenderer::DrawMeshBatches(TArray<FMeshBatchElement>& InMeshBatches, b
 				PixelConst.bHasDiffuseTexture = true;
 				PixelConst.bHasNormalTexture = false;
 			}
-			// 2순위: 머티리얼 텍스처 (스태틱 메시)
+			// 2순위: 머티리얼 텍스처 (스태틱, 스켈레탈 메시)
 			else if (Batch.Material)
 			{
 				const FMaterialInfo& MaterialInfo = Batch.Material->GetMaterialInfo();

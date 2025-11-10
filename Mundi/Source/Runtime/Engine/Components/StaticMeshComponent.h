@@ -1,6 +1,5 @@
 #pragma once
 #include "MeshComponent.h"
-#include "Enums.h"
 #include "AABB.h"
 
 class UStaticMesh;

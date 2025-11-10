@@ -78,7 +78,7 @@ public:
 
 	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FMeshData* meshData, ID3D11Buffer** outBuffer);
 
-	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FStaticMesh* mesh, ID3D11Buffer** outBuffer);
+	static HRESULT CreateIndexBuffer(ID3D11Device* device, const FMesh* mesh, ID3D11Buffer** outBuffer);
 
 	CONSTANT_BUFFER_LIST(DECLARE_UPDATE_CONSTANT_BUFFER_FUNC)
 	CONSTANT_BUFFER_LIST(DECLARE_SET_CONSTANT_BUFFER_FUNC)

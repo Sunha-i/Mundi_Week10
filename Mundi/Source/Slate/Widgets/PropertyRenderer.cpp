@@ -11,6 +11,7 @@
 #include "BillboardComponent.h"
 #include "DecalComponent.h"
 #include "StaticMeshComponent.h"
+#include "SkeletalMeshComponent.h"
 #include "LightComponentBase.h"
 #include "LightComponent.h"
 #include "PointLightComponent.h"
@@ -1194,10 +1195,11 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		// --- 2-2. 텍스처 슬롯 ---
 		// ImGui 위젯 값이 변경될 때만 호출됩니다.
 		UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(OwningObject);
+		USkeletalMeshComponent* SkeletalMeshComp = Cast<USkeletalMeshComponent>(OwningObject);
 
-		if (!StaticMeshComp)
+		if (!StaticMeshComp && !SkeletalMeshComp)
 		{
-			ImGui::Text("UStaticMeshComponent 만 텍스처를 변경할 수 있습니다");
+			ImGui::Text("UStaticMeshComponent 또는 USkeletalMeshComponent만 텍스처를 변경할 수 있습니다");
 			return false;
 		}
 
@@ -1217,12 +1219,24 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 			UTexture* NewTexture = nullptr;
 			if (RenderTextureSelectionCombo(TextureLabel.c_str(), CurrentTexture, NewTexture))
 			{
-				StaticMeshComp->SetMaterialTextureByUser(MaterialIndex, Slot, NewTexture);
+				if (StaticMeshComp)
+					StaticMeshComp->SetMaterialTextureByUser(MaterialIndex, Slot, NewTexture);
+				else if (SkeletalMeshComp)
+					SkeletalMeshComp->SetMaterialTextureByUser(MaterialIndex, Slot, NewTexture);
 				bElementChanged = true;
 			}
 		}
 
 		// --- 2-3. FMaterialInfo 파라미터 (스칼라 및 벡터) ---
+
+		// Helper 매크로: StaticMesh와 SkeletalMesh 둘 다 지원
+		#define SET_MATERIAL_COLOR(ParamName, Value) \
+			if (StaticMeshComp) StaticMeshComp->SetMaterialColorByUser(MaterialIndex, ParamName, Value); \
+			else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialColorByUser(MaterialIndex, ParamName, Value);
+
+		#define SET_MATERIAL_SCALAR(ParamName, Value) \
+			if (StaticMeshComp) StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, ParamName, Value); \
+			else if (SkeletalMeshComp) SkeletalMeshComp->SetMaterialScalarByUser(MaterialIndex, ParamName, Value);
 
 		// ImGui에 표시하기 위해 현재 머티리얼의 최종 Info 값을 가져옵니다.
 		// (MID인 경우 덮어쓰기가 적용된 복사본, UMaterial인 경우 원본)
@@ -1238,7 +1252,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString DiffuseLabel = "Diffuse Color##" + FString(Label);
 		if (ImGui::ColorEdit3(DiffuseLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "DiffuseColor", TempColor);
+			SET_MATERIAL_COLOR("DiffuseColor", TempColor);
 			bElementChanged = true;
 		}
 
@@ -1247,7 +1261,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString AmbientLabel = "Ambient Color##" + FString(Label);
 		if (ImGui::ColorEdit3(AmbientLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "AmbientColor", TempColor);
+			SET_MATERIAL_COLOR("AmbientColor", TempColor);
 			bElementChanged = true;
 		}
 
@@ -1256,7 +1270,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString SpecularLabel = "Specular Color##" + FString(Label);
 		if (ImGui::ColorEdit3(SpecularLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "SpecularColor", TempColor);
+			SET_MATERIAL_COLOR("SpecularColor", TempColor);
 			bElementChanged = true;
 		}
 
@@ -1265,7 +1279,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString EmissiveLabel = "Emissive Color##" + FString(Label);
 		if (ImGui::ColorEdit3(EmissiveLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "EmissiveColor", TempColor);
+			SET_MATERIAL_COLOR("EmissiveColor", TempColor);
 			bElementChanged = true;
 		}
 
@@ -1274,7 +1288,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString TransmissionLabel = "Transmission Filter##" + FString(Label);
 		if (ImGui::ColorEdit3(TransmissionLabel.c_str(), &TempColor.R))
 		{
-			StaticMeshComp->SetMaterialColorByUser(MaterialIndex, "TransmissionFilter", TempColor);
+			SET_MATERIAL_COLOR("TransmissionFilter", TempColor);
 			bElementChanged = true;
 		}
 
@@ -1286,7 +1300,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString SpecExpLabel = "Specular Exponent##" + FString(Label);
 		if (ImGui::DragFloat(SpecExpLabel.c_str(), &TempFloat, 1.0f, 0.0f, 1024.0f))
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "SpecularExponent", TempFloat);
+			SET_MATERIAL_SCALAR("SpecularExponent", TempFloat);
 			bElementChanged = true;
 		}
 
@@ -1295,7 +1309,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString TransparencyLabel = "Transparency##" + FString(Label);
 		if (ImGui::DragFloat(TransparencyLabel.c_str(), &TempFloat, 0.01f, 0.0f, 1.0f))
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "Transparency", TempFloat);
+			SET_MATERIAL_SCALAR("Transparency", TempFloat);
 			bElementChanged = true;
 		}
 
@@ -1304,7 +1318,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString OpticalDensityLabel = "Optical Density##" + FString(Label);
 		if (ImGui::DragFloat(OpticalDensityLabel.c_str(), &TempFloat, 0.01f, 0.0f, 10.0f)) // 범위는 임의로 지정
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "OpticalDensity", TempFloat);
+			SET_MATERIAL_SCALAR("OpticalDensity", TempFloat);
 			bElementChanged = true;
 		}
 
@@ -1313,7 +1327,7 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString BumpMultiplierLabel = "Bump Multiplier##" + FString(Label);
 		if (ImGui::DragFloat(BumpMultiplierLabel.c_str(), &TempFloat, 0.01f, 0.0f, 5.0f)) // 범위는 임의로 지정
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "BumpMultiplier", TempFloat);
+			SET_MATERIAL_SCALAR("BumpMultiplier", TempFloat);
 			bElementChanged = true;
 		}
 
@@ -1322,11 +1336,15 @@ bool UPropertyRenderer::RenderSingleMaterialSlot(const char* Label, UMaterialInt
 		FString IllumModelLabel = "Illum Model##" + FString(Label);
 		if (ImGui::DragInt(IllumModelLabel.c_str(), &TempInt, 1, 0, 10)) // 0-10은 OBJ 표준 범위
 		{
-			StaticMeshComp->SetMaterialScalarByUser(MaterialIndex, "IlluminationModel", (float)TempInt);
+			SET_MATERIAL_SCALAR("IlluminationModel", (float)TempInt);
 			bElementChanged = true;
 		}
 
 		ImGui::Unindent();
+
+		// 매크로 정리
+		#undef SET_MATERIAL_COLOR
+		#undef SET_MATERIAL_SCALAR
 	}
 
 	return bElementChanged;

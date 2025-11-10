@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "UEContainer.h"
+#include "Vector.h"
 
 // 혹시 다른 헤더에서 새어 들어온 매크로 방지
 #ifdef min
@@ -631,6 +632,11 @@ struct FQuat
 			std::fabs(W - Q.W) < KINDA_SMALL_NUMBER;
 	}
 	bool operator!=(const FQuat& Q) const { return !(*this == Q); }
+	FQuat& operator+=(const FQuat& Other)
+	{
+		*this = *this + Other;
+		return *this;
+	}
 
 	// 단위 쿼터니온 체크
 	bool IsIdentity() const
@@ -1231,6 +1237,15 @@ struct FTransform
 		return Result;
 	}
 
+	FMatrix GetModelingMatrix()
+	{
+		FMatrix T = FMatrix::MakeTranslation(Translation);
+		FMatrix R = Rotation.ToMatrix();
+		FMatrix S = FMatrix::MakeScale(Scale3D);
+
+		return S * R * T;
+	}
+
 	// 역변환
 	FTransform Inverse() const;
 
@@ -1265,6 +1280,24 @@ struct FTransform
 			Scale3D == Other.Scale3D;
 	}
 	bool operator!=(const FTransform& Other) const { return !(*this == Other); }
+
+	FTransform& operator+=(const FTransform& Other)
+	{
+		Translation += Other.Translation;
+		Rotation += Other.Rotation;
+		Scale3D += Other.Scale3D;
+
+		return *this;
+	}
+
+	FTransform operator*(const float Scalar)
+	{
+		FTransform Output;
+		Output.Translation = Translation * Scalar;
+		Output.Rotation = Rotation * Scalar;
+		Output.Scale3D = Scale3D * Scalar;
+		return Output;
+	}
 };
 
 // ─────────────────────────────

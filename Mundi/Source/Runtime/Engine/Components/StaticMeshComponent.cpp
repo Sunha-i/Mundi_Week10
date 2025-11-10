@@ -540,4 +540,3 @@ void UStaticMeshComponent::Serialize(const bool bInIsLoading, JSON& InOutHandle)
 		InOutHandle[MaterialSlotsKey] = SlotsArrayJson;
 	}
 }
-

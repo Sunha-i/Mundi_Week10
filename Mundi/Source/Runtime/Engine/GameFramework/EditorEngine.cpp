@@ -4,6 +4,7 @@
 #include "SelectionManager.h"
 #include "FAudioDevice.h"
 #include <ObjManager.h>
+#include "FbxManager.h"
 
 
 float UEditorEngine::ClientWidth = 1024.0f;
@@ -191,8 +192,8 @@ bool UEditorEngine::Startup(HINSTANCE hInstance)
     UI.Initialize(HWnd, RHIDevice.GetDevice(), RHIDevice.GetDeviceContext());
     INPUT.Initialize(HWnd);
 
-    FObjManager::Preload(); 
-
+    FObjManager::Preload();
+    FFbxManager::GetInstance().Preload();
     FAudioDevice::Preload();
 
     ///////////////////////////////////
@@ -268,6 +269,8 @@ void UEditorEngine::HandleUVInput(float DeltaSeconds)
 
 }
 
+#include "FbxManager.h"
+
 void UEditorEngine::MainLoop()
 {
     LARGE_INTEGER Frequency;
@@ -277,6 +280,8 @@ void UEditorEngine::MainLoop()
     QueryPerformanceCounter(&PrevTime);
 
     MSG msg;
+
+    FFbxManager::GetInstance();
 
     while (bRunning)
     {

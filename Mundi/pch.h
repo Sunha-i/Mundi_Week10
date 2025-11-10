@@ -95,6 +95,8 @@ extern TMap<FString, FString> EditorINI;
 extern const FString GDataDir;
 extern const FString GCacheDir;
 
+extern const FString GFbxDataDir;
+
 // Editor & Game
 #include "EditorEngine.h"
 #include "GameEngine.h"
