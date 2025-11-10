@@ -25,7 +25,11 @@ public:
     UMaterialInterface* GetMaterial(uint32 InSectionIndex) const override;
     void SetMaterial(uint32 InElementIndex, UMaterialInterface* InNewMaterial) override;
 
+    void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
+    void DuplicateSubObjects() override;
+
 private:
+    void ClearDynamicMaterials();
     TArray<UMaterialInterface*> MaterialSlots;
     TArray<UMaterialInstanceDynamic*> DynamicMaterialInstances;
 

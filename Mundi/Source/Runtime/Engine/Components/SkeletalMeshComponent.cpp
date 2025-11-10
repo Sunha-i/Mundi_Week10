@@ -9,6 +9,7 @@
 #include "SceneView.h"
 #include "MeshBatchElement.h"
 #include "VertexData.h"
+#include "JsonSerializer.h"
 
 IMPLEMENT_CLASS(USkeletalMeshComponent)
 
@@ -25,6 +26,11 @@ USkeletalMeshComponent::USkeletalMeshComponent()
 }
 
 USkeletalMeshComponent::~USkeletalMeshComponent()
+{
+    ClearDynamicMaterials();
+}
+
+void USkeletalMeshComponent::ClearDynamicMaterials()
 {
     for (UMaterialInstanceDynamic* MID : DynamicMaterialInstances)
     {
@@ -218,4 +224,115 @@ void USkeletalMeshComponent::SetMaterialScalarByUser(const uint32 InMaterialSlot
     }
     if (MID)
         MID->SetScalarParameterValue(ParameterName, Value);
+}
+
+void USkeletalMeshComponent::DuplicateSubObjects()
+{
+    Super::DuplicateSubObjects();
+
+    TMap<UMaterialInstanceDynamic*, UMaterialInstanceDynamic*> OldToNewMIDMap;
+    DynamicMaterialInstances.Empty();
+
+    for (int32 i = 0; i < MaterialSlots.Num(); ++i)
+    {
+        UMaterialInterface* CurrentSlot = MaterialSlots[i];
+        if (UMaterialInstanceDynamic* OldMID = Cast<UMaterialInstanceDynamic>(CurrentSlot))
+        {
+            UMaterialInstanceDynamic* NewMID = nullptr;
+            if (OldToNewMIDMap.Contains(OldMID))
+            {
+                NewMID = OldToNewMIDMap[OldMID];
+            }
+            else
+            {
+                UMaterialInterface* Parent = OldMID->GetParentMaterial();
+                if (!Parent)
+                {
+                    MaterialSlots[i] = nullptr;
+                    continue;
+                }
+                NewMID = UMaterialInstanceDynamic::Create(Parent);
+                if (NewMID)
+                {
+                    NewMID->CopyParametersFrom(OldMID);
+                    DynamicMaterialInstances.Add(NewMID);
+                    OldToNewMIDMap.Add(OldMID, NewMID);
+                }
+            }
+            MaterialSlots[i] = NewMID;
+        }
+    }
+}
+
+void USkeletalMeshComponent::Serialize(const bool bInIsLoading, JSON& InOutHandle)
+{
+    Super::Serialize(bInIsLoading, InOutHandle);
+
+    const FString MaterialSlotsKey = "MaterialSlots";
+
+    if (bInIsLoading)
+    {
+        ClearDynamicMaterials();
+
+        JSON SlotsArrayJson;
+        if (FJsonSerializer::ReadArray(InOutHandle, MaterialSlotsKey, SlotsArrayJson, JSON::Make(JSON::Class::Array), false))
+        {
+            MaterialSlots.resize(SlotsArrayJson.size());
+
+            for (int i = 0; i < SlotsArrayJson.size(); ++i)
+            {
+                JSON& SlotJson = SlotsArrayJson.at(i);
+                if (SlotJson.IsNull())
+                {
+                    MaterialSlots[i] = nullptr;
+                    continue;
+                }
+
+                FString ClassName;
+                FJsonSerializer::ReadString(SlotJson, "Type", ClassName, "None", false);
+
+                UMaterialInterface* LoadedMaterial = nullptr;
+                if (ClassName == UMaterialInstanceDynamic::StaticClass()->Name)
+                {
+                    UMaterialInstanceDynamic* NewMID = new UMaterialInstanceDynamic();
+                    NewMID->Serialize(true, SlotJson);
+                    DynamicMaterialInstances.Add(NewMID);
+                    LoadedMaterial = NewMID;
+                }
+                else
+                {
+                    FString AssetPath;
+                    FJsonSerializer::ReadString(SlotJson, "AssetPath", AssetPath, "", false);
+                    if (!AssetPath.empty())
+                    {
+                        LoadedMaterial = UResourceManager::GetInstance().Load<UMaterial>(AssetPath);
+                    }
+                    else
+                    {
+                        LoadedMaterial = nullptr;
+                    }
+                }
+                MaterialSlots[i] = LoadedMaterial;
+            }
+        }
+    }
+    else
+    {
+        JSON SlotsArrayJson = JSON::Make(JSON::Class::Array);
+        for (UMaterialInterface* Mtl : MaterialSlots)
+        {
+            JSON SlotJson = JSON::Make(JSON::Class::Object);
+            if (Mtl == nullptr)
+            {
+                SlotJson["Type"] = "None";
+            }
+            else
+            {
+                SlotJson["Type"] = Mtl->GetClass()->Name;
+                Mtl->Serialize(false, SlotJson);
+            }
+            SlotsArrayJson.append(SlotJson);
+        }
+        InOutHandle[MaterialSlotsKey] = SlotsArrayJson;
+    }
 }
