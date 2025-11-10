@@ -8,6 +8,7 @@
 #include "ImGui/imgui_impl_dx11.h"
 #include "imGui/imgui_impl_win32.h"
 #include "Widgets/TargetActorTransformWidget.h"
+#include "Windows/SkeletalMeshViewerWindow.h"
 
 IMPLEMENT_CLASS(UUIManager)
 
@@ -92,7 +93,7 @@ void UUIManager::Shutdown()
 		if (Window && !Window->IsSingleton())
 		{
 			Window->Cleanup();
-			delete Window;
+			//delete Window;
 		}
 	}
 
@@ -160,14 +161,34 @@ void UUIManager::Render()
 	// SortUIWindowsByPriority();
 
 	// 모든 UI 윈도우 렌더링
-	for (auto* Window : UIWindows)
+	for (int i = 0; i < UIWindows.size(); ++i)
 	{
+		UUIWindow* Window = UIWindows[i];
 		if (Window)
 		{
-			Window->RenderWindow();
+		    Window->RenderWindow();
+		
+		    // 방금 렌더링된 창이 닫혔는지 확인
+		    if (!Window->IsOpened())
+		    {
+		        // UnregisterUIWindow는 내부적으로 erase를 호출하므로,
+		        // Unregister만 호출하거나 직접 제거 로직을 작성
+		        // 여기서는 직접 제거하는 방식을 사용
+				if (FocusedWindow == Window)
+				{
+					FocusedWindow = nullptr;
+				}
+		
+		        Window->Cleanup();
+		        //delete Window;
+				ObjectFactory::DeleteObject(Window);
+		        UIWindows.erase(UIWindows.begin() + i);
+		        --i; // 배열에서 요소가 제거되었으므로 인덱스를 조정
+		    }
 		}
 	}
 }
+
 void UUIManager::EndFrame() 
 {
 	// ImGui 프레임 종료
@@ -368,4 +389,41 @@ void UUIManager::ClearTransformWidgetSelection()
 	{
 		TargetTransformWidgetRef->OnSelectedActorCleared();
 	}
+}
+
+void UUIManager::OpenSkeletalMeshViewer(USkeletalMesh* InMesh)
+{
+	if (!InMesh)	return;
+
+	// 이미 해당 메시의 뷰어가 열려있는지 확인 (중복 생성 방지)
+	// 추후 ResourceManager가 캐시된 USkeletalMesh를 반환하도록 수정해, 객체의 포인터를 비교할 것
+	const FString& InMeshPath = InMesh->GetFilePath();
+	if (InMeshPath.empty())
+	{
+		UE_LOG("Cannot open viewer for mesh with no file path.");
+		return;
+	}
+	
+	for (UUIWindow* ExistingWindow : UIWindows)
+	{
+		if (USkeletalMeshViewerWindow* ViewerWindow = Cast<USkeletalMeshViewerWindow>(ExistingWindow))
+		{
+			if (ViewerWindow->TargetMesh && ViewerWindow->TargetMesh->GetFilePath() == InMeshPath)
+			{
+				UE_LOG("SkeletalMeshViewer for '%s' is already open. Bringing to front.", InMesh->GetName().c_str());
+				ViewerWindow->SetWindowState(EUIWindowState::Visible);
+				SetFocusedWindow(ViewerWindow);
+				return;
+			}
+		}
+	}
+
+	USkeletalMeshViewerWindow* NewViewer = NewObject<USkeletalMeshViewerWindow>();
+	
+	NewViewer->InitConfig.WindowTitle = "Skeletal Mesh Viewer";
+	NewViewer->InitConfig.DefaultSize = ImVec2(600, 800);
+	NewViewer->InitConfig.UpdateWindowFlags();
+	NewViewer->TargetMesh = InMesh;
+
+	RegisterUIWindow(NewViewer);
 }

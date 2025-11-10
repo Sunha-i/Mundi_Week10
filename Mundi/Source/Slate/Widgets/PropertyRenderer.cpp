@@ -1092,7 +1092,7 @@ bool UPropertyRenderer::RenderSkeletalMeshProperty(const FProperty& Prop, void* 
 		return false;
 	}
 
-	int SelectedIdx = -1;
+	int SelectedIdx = 0;	// Default is "None"
 	for (int i = 0; i < static_cast<int>(CachedSkeletalMeshPaths.size()); ++i)
 	{
 		if (CachedSkeletalMeshPaths[i] == CurrentPath)
@@ -1121,28 +1121,38 @@ bool UPropertyRenderer::RenderSkeletalMeshProperty(const FProperty& Prop, void* 
 		}
 	}
 
-	// 닫힌 콤보박스 '텍스트' 부분에 마우스를 올렸을 때 전체 경로 툴팁
-	if (ImGui::IsItemHovered())
+	ImGui::SameLine();
+	if (ImGui::Button("View"))
 	{
-		if (!CurrentPath.empty())
+		if (SelectedIdx > 0)	// if not "None"
 		{
-			ImGui::BeginTooltip();
-
-			// 1. 원본 경로 표시 (CurrentTexturePath는 null일 때 "None"을 가짐)
-			ImGui::TextUnformatted(CurrentPath.c_str());
-
-			// 2. CurrentTexture가 유효하고 캐시 파일 경로가 있다면 추가로 표시
-			if ((*MeshPtr))
+			USkeletalMesh* SelectedMesh = *MeshPtr;
+			if (SelectedMesh)
 			{
-				const FString& CachedPath = (*MeshPtr)->GetCacheFilePath();
-				if (!CachedPath.empty())
-				{
-					ImGui::Separator(); // 원본 경로와 구분하기 위해 선 추가
-					ImGui::Text("Cache: %s", CachedPath.c_str());
-				}
+				UUIManager::GetInstance().OpenSkeletalMeshViewer(SelectedMesh);
 			}
-			ImGui::EndTooltip();
 		}
+	}
+
+	// 닫힌 콤보박스 '텍스트' 부분에 마우스를 올렸을 때 전체 경로 툴팁
+	if (ImGui::IsItemHovered() && !CurrentPath.empty())
+	{
+		ImGui::BeginTooltip();
+
+		// 1. 원본 경로 표시 (CurrentTexturePath는 null일 때 "None"을 가짐)
+		ImGui::TextUnformatted(CurrentPath.c_str());
+
+		// 2. CurrentTexture가 유효하고 캐시 파일 경로가 있다면 추가로 표시
+		if ((*MeshPtr))
+		{
+			const FString& CachedPath = (*MeshPtr)->GetCacheFilePath();
+			if (!CachedPath.empty())
+			{
+				ImGui::Separator(); // 원본 경로와 구분하기 위해 선 추가
+				ImGui::Text("Cache: %s", CachedPath.c_str());
+			}
+		}
+		ImGui::EndTooltip();
 	}
 
 	return false;

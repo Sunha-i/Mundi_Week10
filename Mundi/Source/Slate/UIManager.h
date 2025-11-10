@@ -77,6 +77,9 @@ public:
 	void RegisterTargetTransformWidget(UTargetActorTransformWidget* InWidget);
 	void ClearTransformWidgetSelection(); // Transform 위젯의 선택을 즉시 해제
 
+	// Skeletal Mesh Viewer
+	void OpenSkeletalMeshViewer(USkeletalMesh* InMesh);
+
 public:
 	UUIManager();
 protected:

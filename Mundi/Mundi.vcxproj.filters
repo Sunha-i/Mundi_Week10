@@ -548,6 +548,12 @@
     <ClCompile Include="Source\Runtime\AssetManagement\MeshBase.cpp">
       <Filter>Source\Runtime\AssetManagement</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Slate\Widgets\SkeletalMeshViewportWidget.cpp">
+      <Filter>Source\Slate\Widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Slate\Windows\SkeletalMeshViewerWindow.cpp">
+      <Filter>Source\Slate\Windows</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Editor\FbxCache.cpp">
       <Filter>Source\Editor</Filter>
     </ClCompile>
@@ -1186,6 +1192,12 @@
     </ClInclude>
     <ClInclude Include="Source\Runtime\AssetManagement\MeshBase.h">
       <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Slate\Widgets\SkeletalMeshViewportWidget.h">
+      <Filter>Source\Slate\Widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Slate\Windows\SkeletalMeshViewerWindow.h">
+      <Filter>Source\Slate\Windows</Filter>
     </ClInclude>
     <ClInclude Include="Source\Editor\FbxCache.h">
       <Filter>Source\Editor</Filter>
