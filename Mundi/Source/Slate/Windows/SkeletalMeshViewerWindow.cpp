@@ -12,7 +12,7 @@ void USkeletalMeshViewerWindow::Initialize()
 {
 	Super::Initialize();
 
-	FUIWindowConfig Config;
+	FUIWindowConfig Config = InitConfig;
 	if (TargetMesh)
 	{
 		Config.WindowTitle = "Skeletal Mesh Viewer: " + TargetMesh->GetName();

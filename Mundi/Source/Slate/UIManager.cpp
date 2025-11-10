@@ -421,7 +421,7 @@ void UUIManager::OpenSkeletalMeshViewer(USkeletalMesh* InMesh)
 	USkeletalMeshViewerWindow* NewViewer = NewObject<USkeletalMeshViewerWindow>();
 	
 	NewViewer->InitConfig.WindowTitle = "Skeletal Mesh Viewer";
-	NewViewer->InitConfig.DefaultSize = ImVec2(800, 1000);
+	NewViewer->InitConfig.DefaultSize = ImVec2(600, 800);
 	NewViewer->InitConfig.UpdateWindowFlags();
 	NewViewer->TargetMesh = InMesh;
 
