@@ -8,6 +8,7 @@
 #include "ImGui/imgui_impl_dx11.h"
 #include "imGui/imgui_impl_win32.h"
 #include "Widgets/TargetActorTransformWidget.h"
+#include "Windows/SkeletalMeshViewerWindow.h"
 
 IMPLEMENT_CLASS(UUIManager)
 
@@ -368,4 +369,20 @@ void UUIManager::ClearTransformWidgetSelection()
 	{
 		TargetTransformWidgetRef->OnSelectedActorCleared();
 	}
+}
+
+void UUIManager::OpenSkeletalMeshViewer(USkeletalMesh* InMesh)
+{
+	if (!InMesh)	return;
+
+	// TODO: 이미 해당 메시의 뷰어가 열려있는지 확인 (중복 생성 방지)
+
+	USkeletalMeshViewerWindow* NewViewer = NewObject<USkeletalMeshViewerWindow>();
+	
+	NewViewer->InitConfig.WindowTitle = "Skeletal Mesh Viewer";
+	NewViewer->InitConfig.DefaultSize = ImVec2(800, 1000);
+	NewViewer->InitConfig.UpdateWindowFlags();
+	NewViewer->TargetMesh = InMesh;
+
+	RegisterUIWindow(NewViewer);
 }

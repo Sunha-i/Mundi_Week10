@@ -312,6 +312,8 @@
     <ClCompile Include="Source\Runtime\Renderer\SceneView.cpp" />
     <ClCompile Include="Source\Runtime\Renderer\TileLightCuller.cpp" />
     <ClCompile Include="Source\Slate\Widgets\PropertyRenderer.cpp" />
+    <ClCompile Include="Source\Slate\Widgets\SkeletalMeshViewportWidget.cpp" />
+    <ClCompile Include="Source\Slate\Windows\SkeletalMeshViewerWindow.cpp" />
     <ClCompile Include="ThirdParty\ImGui\imgui.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug_StandAlone|x64'">NotUsing</PrecompiledHeader>
@@ -634,6 +636,8 @@
     <ClInclude Include="Source\Runtime\RHI\SwapGuard.h" />
     <ClInclude Include="Source\Runtime\RHI\ConstantBufferType.h" />
     <ClInclude Include="Source\Slate\Widgets\PropertyRenderer.h" />
+    <ClInclude Include="Source\Slate\Widgets\SkeletalMeshViewportWidget.h" />
+    <ClInclude Include="Source\Slate\Windows\SkeletalMeshViewerWindow.h" />
     <ClInclude Include="ThirdParty\DirectXTK\include\Audio.h" />
     <ClInclude Include="ThirdParty\DirectXTK\include\BufferHelpers.h" />
     <ClInclude Include="ThirdParty\DirectXTK\include\CommonStates.h" />
