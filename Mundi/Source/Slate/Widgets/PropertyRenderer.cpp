@@ -1124,23 +1124,25 @@ bool UPropertyRenderer::RenderSkeletalMeshProperty(const FProperty& Prop, void* 
 	// 닫힌 콤보박스 '텍스트' 부분에 마우스를 올렸을 때 전체 경로 툴팁
 	if (ImGui::IsItemHovered())
 	{
-		ImGui::BeginTooltip();
-
-		// 1. 원본 경로 표시 (CurrentTexturePath는 null일 때 "None"을 가짐)
-		ImGui::TextUnformatted(CurrentPath.c_str());
-
-		// 2. CurrentTexture가 유효하고 캐시 파일 경로가 있다면 추가로 표시
-		if ((*MeshPtr))
+		if (!CurrentPath.empty())
 		{
-			const FString& CachedPath = (*MeshPtr)->GetCacheFilePath();
-			if (!CachedPath.empty())
-			{
-				ImGui::Separator(); // 원본 경로와 구분하기 위해 선 추가
-				ImGui::Text("Cache: %s", CachedPath.c_str());
-			}
-		}
+			ImGui::BeginTooltip();
 
-		ImGui::EndTooltip();
+			// 1. 원본 경로 표시 (CurrentTexturePath는 null일 때 "None"을 가짐)
+			ImGui::TextUnformatted(CurrentPath.c_str());
+
+			// 2. CurrentTexture가 유효하고 캐시 파일 경로가 있다면 추가로 표시
+			if ((*MeshPtr))
+			{
+				const FString& CachedPath = (*MeshPtr)->GetCacheFilePath();
+				if (!CachedPath.empty())
+				{
+					ImGui::Separator(); // 원본 경로와 구분하기 위해 선 추가
+					ImGui::Text("Cache: %s", CachedPath.c_str());
+				}
+			}
+			ImGui::EndTooltip();
+		}
 	}
 
 	return false;
