@@ -15,8 +15,8 @@ END_PROPERTIES()
 
 USkinnedMeshComponent::USkinnedMeshComponent()
 {
-    //SetSkeletalMesh(GFbxDataDir + "/Rogue/rogue_all.fbx");
-    SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
+    SetSkeletalMesh(GFbxDataDir + "/Rogue/rogue_all.fbx");
+    //SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
 }
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
@@ -140,12 +140,15 @@ void USkinnedMeshComponent::CollectMeshBatches(
         for (int32 i = 0; i < Flesh.Bones.size(); i++)
         {
             UBone* Bone = Flesh.Bones[i];
+            if (!Bone)
+                continue;
+
             float Weight = Flesh.Weights[i];
             BoneOffSet += Bone->GetBoneOffset() * Weight;
         }
         FMatrix SkinningMatrix = BoneOffSet.GetModelingMatrix();
         
-        BatchElement.WorldMatrix = GetWorldMatrix() * SkinningMatrix;
+        BatchElement.WorldMatrix = GetWorldMatrix();// *SkinningMatrix;
         BatchElement.ObjectID = InternalIndex;
         BatchElement.PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
