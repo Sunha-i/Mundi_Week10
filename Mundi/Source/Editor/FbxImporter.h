@@ -11,6 +11,36 @@ struct FFlesh;
 
 // FBX 스케일 통합 (cm 기준)
 constexpr float FBXUnitScale = 0.01f;
+// ============================================================================
+// [FBX 유틸리티] 공통 변환 / 단위 스케일
+// ============================================================================
+namespace FBXUtil
+{
+	constexpr float UnitScale = 0.01f;
+
+	inline FVector ConvertPosition(const FbxVector4& Pos)
+	{
+		return FVector(
+			static_cast<float>(Pos[0]),
+			static_cast<float>(-Pos[1]),
+			static_cast<float>(Pos[2])
+		) * UnitScale;
+	}
+
+	inline FVector ConvertNormal(const FbxVector4& Normal)
+	{
+		return FVector(
+			static_cast<float>(Normal[0]),
+			static_cast<float>(-Normal[1]),
+			static_cast<float>(Normal[2])
+		);
+	}
+
+	inline FVector4 DefaultTangent()
+	{
+		return FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+	}
+}
 
 class FFbxImporter
 {
