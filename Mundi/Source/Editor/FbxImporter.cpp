@@ -744,3 +744,110 @@ void FFbxImporter::ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStat
     OutStaticMesh->Indices.insert(OutStaticMesh->Indices.end(), ReorderedIndices.begin(), ReorderedIndices.end());
     OutStaticMesh->bHasMaterial = OutStaticMesh->bHasMaterial || (InMesh->GetElementMaterialCount() > 0);
 }
+
+bool FFbxImporter::BuildStaticMeshFromPath(const FString& Path, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos)
+{
+	if (!OutStaticMesh)
+		return false;
+
+	// FBX Importer 초기화
+	FbxImporter* LocalImporter = FbxImporter::Create(SdkManager, "");
+	if (!LocalImporter->Initialize(Path.c_str(), -1, SdkManager->GetIOSettings()))
+	{
+		LocalImporter->Destroy();
+		return false;
+	}
+
+	// 씬 로드
+	FbxScene* Scene = FbxScene::Create(SdkManager, "StaticMeshScene");
+	if (!LocalImporter->Import(Scene))
+	{
+		LocalImporter->Destroy();
+		Scene->Destroy();
+		return false;
+	}
+	LocalImporter->Destroy();
+
+	// 메시 초기화
+	OutStaticMesh->Vertices.clear();
+	OutStaticMesh->Indices.clear();
+	OutStaticMesh->GroupInfos.clear();
+	OutStaticMesh->bHasMaterial = false;
+	OutStaticMesh->PathFileName = Path;
+
+	// 머티리얼 파싱
+	TMap<int64, FMaterialInfo> MaterialIDToInfoMap;
+	int MaterialCount = Scene->GetMaterialCount();
+	std::filesystem::path FbxDir = std::filesystem::path(Path).parent_path();
+
+	auto ExtractTexturePath = [&FbxDir](FbxProperty& Prop) -> FString
+		{
+			FString TexturePath = "";
+			int FileTextureCount = Prop.GetSrcObjectCount<FbxFileTexture>();
+			if (FileTextureCount > 0)
+			{
+				FbxFileTexture* FileTexture = Prop.GetSrcObject<FbxFileTexture>(0);
+				if (FileTexture)
+				{
+					const char* FileName = FileTexture->GetFileName();
+					if (FileName && strlen(FileName) > 0)
+					{
+						TexturePath = FileName;
+						std::filesystem::path TexPath(TexturePath);
+						if (!std::filesystem::exists(TexPath))
+						{
+							std::filesystem::path RelativePath = FbxDir / TexPath.filename();
+							if (std::filesystem::exists(RelativePath))
+							{
+								TexturePath = RelativePath.string();
+							}
+						}
+						TexturePath = NormalizePath(TexturePath);
+					}
+				}
+			}
+			return TexturePath;
+		};
+
+	// 머티리얼 루프
+	for (int i = 0; i < MaterialCount; i++)
+	{
+		FbxSurfaceMaterial* Material = Scene->GetMaterial(i);
+		if (!Material)
+			continue;
+
+		FMaterialInfo MatInfo;
+		MatInfo.MaterialName = Material->GetName();
+		int64 MaterialID = Material->GetUniqueID();
+
+		FbxProperty DiffuseProp = Material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+		if (DiffuseProp.IsValid())
+		{
+			FbxDouble3 DiffuseColor = DiffuseProp.Get<FbxDouble3>();
+			MatInfo.DiffuseColor = FVector(static_cast<float>(DiffuseColor[0]),
+				static_cast<float>(DiffuseColor[1]),
+				static_cast<float>(DiffuseColor[2]));
+			MatInfo.DiffuseTextureFileName = ExtractTexturePath(DiffuseProp);
+		}
+
+		MaterialIDToInfoMap.Add(MaterialID, MatInfo);
+	}
+
+	// 메시 파싱
+	FbxNode* RootNode = Scene->GetRootNode();
+	if (RootNode)
+	{
+		ProcessMeshNodeAsStatic(RootNode, OutStaticMesh, MaterialIDToInfoMap);
+	}
+
+	Scene->Destroy();
+
+	// 머티리얼 목록 복사
+	OutMaterialInfos.clear();
+	OutMaterialInfos.reserve(MaterialIDToInfoMap.size());
+	for (auto& Pair : MaterialIDToInfoMap)
+	{
+		OutMaterialInfos.Add(Pair.second);
+	}
+	return true;
+}

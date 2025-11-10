@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <fbxsdk.h>
 #include "UEContainer.h"
@@ -32,6 +32,8 @@ public:
     // Mesh extraction (static)
     void ProcessMeshNodeAsStatic(FbxNode* InNode, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
     void ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
+    bool BuildStaticMeshFromPath(const FString& Path, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos);
 private:
     FbxManager* SdkManager = nullptr;
 };
+

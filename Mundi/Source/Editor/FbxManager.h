@@ -41,8 +41,8 @@ public:
 
     // Skeleton이 없는 FBX를 StaticMesh로 처리
     FStaticMesh* LoadFbxStaticMeshAsset(const FString& PathFileName);
+    //bool BuildStaticMeshFromFbx(const FString& NormalizedPathStr, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos);
 private:
-    bool BuildStaticMeshFromFbx(const FString& NormalizedPathStr, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos);
     // Helper functions for FBX parsing
     //FTransform ConvertFbxTransform(const FbxAMatrix& InMatrix);
 
