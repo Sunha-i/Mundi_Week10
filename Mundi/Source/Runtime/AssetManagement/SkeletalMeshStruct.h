@@ -2,7 +2,7 @@
 #include "Flesh.h"
 #include "Skeleton.h"
 
-// Cooked Data
+// Raw Data(좀 정리가 되어 있는)
 struct FSkeletalMesh : public FMesh
 {
     FSkeletalMesh() = default;
