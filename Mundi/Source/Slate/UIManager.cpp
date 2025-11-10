@@ -93,7 +93,7 @@ void UUIManager::Shutdown()
 		if (Window && !Window->IsSingleton())
 		{
 			Window->Cleanup();
-			delete Window;
+			//delete Window;
 		}
 	}
 
@@ -180,7 +180,8 @@ void UUIManager::Render()
 				}
 		
 		        Window->Cleanup();
-		        delete Window;
+		        //delete Window;
+				ObjectFactory::DeleteObject(Window);
 		        UIWindows.erase(UIWindows.begin() + i);
 		        --i; // 배열에서 요소가 제거되었으므로 인덱스를 조정
 		    }
@@ -394,7 +395,28 @@ void UUIManager::OpenSkeletalMeshViewer(USkeletalMesh* InMesh)
 {
 	if (!InMesh)	return;
 
-	// TODO: 이미 해당 메시의 뷰어가 열려있는지 확인 (중복 생성 방지)
+	// 이미 해당 메시의 뷰어가 열려있는지 확인 (중복 생성 방지)
+	// 추후 ResourceManager가 캐시된 USkeletalMesh를 반환하도록 수정해, 객체의 포인터를 비교할 것
+	const FString& InMeshPath = InMesh->GetFilePath();
+	if (InMeshPath.empty())
+	{
+		UE_LOG("Cannot open viewer for mesh with no file path.");
+		return;
+	}
+	
+	for (UUIWindow* ExistingWindow : UIWindows)
+	{
+		if (USkeletalMeshViewerWindow* ViewerWindow = Cast<USkeletalMeshViewerWindow>(ExistingWindow))
+		{
+			if (ViewerWindow->TargetMesh && ViewerWindow->TargetMesh->GetFilePath() == InMeshPath)
+			{
+				UE_LOG("SkeletalMeshViewer for '%s' is already open. Bringing to front.", InMesh->GetName().c_str());
+				ViewerWindow->SetWindowState(EUIWindowState::Visible);
+				SetFocusedWindow(ViewerWindow);
+				return;
+			}
+		}
+	}
 
 	USkeletalMeshViewerWindow* NewViewer = NewObject<USkeletalMeshViewerWindow>();
 	
