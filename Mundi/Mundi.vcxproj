@@ -222,6 +222,7 @@
     </ClCompile>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Source\Editor\FbxDebugLog.cpp" />
+    <ClCompile Include="Source\Editor\FbxImporter.cpp" />
     <ClCompile Include="Source\Editor\FbxManager.cpp" />
     <ClCompile Include="Source\Editor\FbxCache.cpp" />
     <ClCompile Include="Source\Runtime\AssetManagement\Bone.cpp" />
@@ -567,6 +568,7 @@
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="Source\Editor\FbxDebugLog.h" />
+    <ClInclude Include="Source\Editor\FbxImporter.h" />
     <ClInclude Include="Source\Editor\FbxManager.h" />
     <ClInclude Include="Source\Editor\Clipboard\ClipboardManager.h" />
     <ClInclude Include="Source\Editor\FbxCache.h" />
