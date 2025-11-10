@@ -5,6 +5,7 @@
 #include "FAudioDevice.h"
 #include <ObjManager.h>
 #include "FbxManager.h"
+#include "MemoryManager.h"
 
 
 float UEditorEngine::ClientWidth = 1024.0f;

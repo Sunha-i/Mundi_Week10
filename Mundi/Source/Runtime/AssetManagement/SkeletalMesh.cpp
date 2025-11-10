@@ -8,7 +8,7 @@ IMPLEMENT_CLASS(USkeletalMesh)
 USkeletalMesh::~USkeletalMesh()
 {
     if (SkeletalMeshAsset)
-        DeleteObject(SkeletalMeshAsset);
+         delete SkeletalMeshAsset;
 };
 
 void USkeletalMesh::Load(
@@ -145,7 +145,9 @@ void USkeletalMesh::DuplicateSubObjects()
     // FSkeletalMesh 깊은 복사 (복사 생성자가 Skeleton과 Fleshes를 모두 복사함)
     if (SkeletalMeshAsset)
     {
-        FSkeletalMesh* OriginalAsset = SkeletalMeshAsset;
-        SkeletalMeshAsset = new FSkeletalMesh(*OriginalAsset);
+        Load(
+            SkeletalMeshAsset->PathFileName,
+            GEngine.GetRHIDevice()->GetDevice()
+        );
     }
 }

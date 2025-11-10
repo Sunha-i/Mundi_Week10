@@ -2,6 +2,7 @@
 #include "FbxManager.h"
 #include "FbxDebugLog.h"
 #include "Bone.h"
+#include "Keyboard.h"
 #include "SkeletalMesh.h"
 
 #include "ObjectIterator.h"
@@ -52,6 +53,15 @@ void FFbxManager::Initialize()
 
 void FFbxManager::Shutdown()
 {
+    for (
+        auto Iter = FbxSkeletalMeshMap.begin();
+        Iter != FbxSkeletalMeshMap.end();
+        Iter++
+    )
+    {
+        if (Iter->second)
+            delete Iter->second;
+    }
     // SDK 관리자와 그것이 처리하던 다른 모든 객체를 소멸시킨다.
     SdkManager->Destroy();
 }

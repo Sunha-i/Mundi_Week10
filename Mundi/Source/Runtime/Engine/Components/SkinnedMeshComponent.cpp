@@ -21,6 +21,8 @@ USkinnedMeshComponent::USkinnedMeshComponent()
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
 {
+    if (SkeletalMesh)
+        ObjectFactory::DeleteObject(SkeletalMesh);
     ClearDynamicMaterials();
 }
 
@@ -259,7 +261,7 @@ void USkinnedMeshComponent::SetSkeletalMesh(const FString& PathFileName)
     ClearDynamicMaterials();
 
     // 새 메시를 로드합니다.
-    SkeletalMesh = UResourceManager::GetInstance().Load<USkeletalMesh>(PathFileName);
+    SkeletalMesh = UResourceManager::GetInstance().Load<USkeletalMesh>(PathFileName)->Duplicate();
 
     if (SkeletalMesh && SkeletalMesh->GetSkeletalMeshAsset())
     {
