@@ -175,6 +175,13 @@ void UStaticMeshComponent::SetStaticMesh(const FString& PathFileName)
 	// 새 메시를 설정하기 전에, 기존에 생성된 모든 MID와 슬롯 정보를 정리합니다.
 	ClearDynamicMaterials();
 
+	// PathFileName이 비어있거나 "None"이면 nullptr로 설정
+	if (PathFileName.empty() || PathFileName == "None")
+	{
+		StaticMesh = nullptr;
+		return;
+	}
+
 	// 새 메시를 로드합니다.
 	StaticMesh = UResourceManager::GetInstance().Load<UStaticMesh>(PathFileName);
 	if (StaticMesh && StaticMesh->GetStaticMeshAsset())
