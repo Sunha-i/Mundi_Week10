@@ -53,8 +53,12 @@ Matrix4x4 FFBXImporter::ConvertMatrix(const FbxAMatrix& Src)
 {
     Matrix4x4 Out{};
     for (int r = 0; r < 4; ++r)
+    {
         for (int c = 0; c < 4; ++c)
+        {
             Out.m[r][c] = static_cast<float>(Src.Get(r, c));
+        }
+    }
     return Out;
 }
 
@@ -122,12 +126,6 @@ bool FFBXImporter::LoadFBX(const std::string& FilePath)
     {
         const FbxAxisSystem desiredAxis = FbxAxisSystem::DirectX; // Left-handed, +Y up
         desiredAxis.ConvertScene(mScene);
-
-        const FbxSystemUnit desiredUnit = FbxSystemUnit::m; // meters
-        if (mScene->GetGlobalSettings().GetSystemUnit() != desiredUnit)
-        {
-            desiredUnit.ConvertScene(mScene);
-        }
     }
 
     // 메시를 전부 삼각형화 (Quads → Triangles)
@@ -337,6 +335,20 @@ void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
         OutBone.BoneTransform = ConvertMatrix(GlobalM);
         OutBone.SkinningMatrix = ConvertMatrix(SkinningM);
 
+        OutBone.ParentIndex = -1; // 기본값
+        if (FbxNode* ParentNode = BoneNode->GetParent())
+        {
+            const char* ParentName = ParentNode->GetName();
+            // 이미 등록된 본들 중 이름이 같은 본 찾기
+            for (int i = 0; i < Bones.Num(); ++i)
+            {
+                if (Bones[i].Name == ParentName)
+                {
+                    OutBone.ParentIndex = i;
+                    break;
+                }
+            }
+        }
         // 본이 영향을 주는 정점에 상위 4개만 유지
         int* Indices = Cluster->GetControlPointIndices();
         double* Weights = Cluster->GetControlPointWeights();
@@ -421,9 +433,16 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
     if ((int)SkinnedVertices.size() < ControlPointCount)
         SkinnedVertices.resize(ControlPointCount);
 
-    // 단위 변환은 LoadFBX 단계에서 FbxSystemUnit::m 로 이미 처리함.
-    // 여기서는 추가 스케일을 적용하지 않는다. (UV/노멀/포지션 모두 그대로 사용)
-    const float unitToMeters = 1.0f;
+    // 좌표 단위 보정: FBX Scene의 단위(센티미터 기준 스케일)를 조회해 미터로 변환
+    // FBX SDK: GetScaleFactor() = 해당 단위의 1 유닛이 몇 cm 인지 (예: m -> 100, cm -> 1)
+    // 우리가 원하는 최종 단위는 '미터'이므로, 보정 계수 = scaleFactor_cm / 100.0f
+    //  - Scene 단위가 미터(100)면 계수=1.0 → 변화 없음
+    //  - Scene 단위가 센티미터(1)면 계수=0.01 → cm → m 변환
+    //if (mScene)
+    //{
+    //    const double scaleCm = mScene->GetGlobalSettings().GetSystemUnit().GetScaleFactor();
+    //    unitToMeters = static_cast<float>(scaleCm / 100.0);
+    //}
 
     // 모든 폴리곤(삼각형)을 순회하며, 각 코너 단위로 속성 기록 + 코너 인덱스 기반 삼각형 생성
     for (int PolyIndex = 0; PolyIndex < PolygonCount; ++PolyIndex)
@@ -441,11 +460,11 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
             }
             // Position (컨트롤 포인트 위치는 cp에 보관)
             const FbxVector4& P = ControlPoints[ControlPointIndex];
-            // Convert to engine space: match OBJ pipeline (invert Y)
+            // 위치를 엔진 단위(미터)로 변환
             SkinnedVertices[ControlPointIndex].pos = FVector(
-                (float)P[0],
-                (float)P[1],
-                (float)P[2]);
+                (float)P[0] * unitToMeters,
+                (float)P[1] * unitToMeters,
+                (float)P[2] * unitToMeters);
 
             // Corner Normal
             FVector NormalOut;

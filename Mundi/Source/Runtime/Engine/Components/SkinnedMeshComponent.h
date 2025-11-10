@@ -13,7 +13,7 @@ public:
     USkinnedMeshComponent() = default;
     ~USkinnedMeshComponent() override = default;
 
-    // Set from cached/loaded FBX via manager
+    // Set from cached/loaded FBX 
     void SetSkeletalMesh(const FString& PathFileName);
     // Directly assign an instance
     void SetSkeletalMesh(USkeletalMesh* InMesh) { SkeletalMesh = InMesh; }

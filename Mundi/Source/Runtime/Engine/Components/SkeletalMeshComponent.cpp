@@ -9,6 +9,11 @@
 #include "SceneView.h"
 #include "MeshBatchElement.h"
 #include "VertexData.h"
+#include "D3D11RHI.h"
+#include <d3d11.h>
+#include <cmath>
+#include <algorithm>
+//#include "../AssetManagement/ResourceManager.h"
 #include "JsonSerializer.h"
 
 IMPLEMENT_CLASS(USkeletalMeshComponent)
@@ -18,8 +23,108 @@ BEGIN_PROPERTIES(USkeletalMeshComponent)
     ADD_PROPERTY_ARRAY(EPropertyType::Material, MaterialSlots, "Materials", true)
 END_PROPERTIES()
 
+namespace
+{
+    Matrix4x4 MakeIdentityMatrix4x4()
+    {
+        Matrix4x4 M{};
+        for (int32 i = 0; i < 4; ++i)
+        {
+            for (int32 j = 0; j < 4; ++j)
+            {
+                M.m[i][j] = (i == j) ? 1.0f : 0.0f;
+            }
+        }
+        return M;
+    }
+
+    const Matrix4x4& IdentityMatrix4x4()
+    {
+        static const Matrix4x4 Identity = MakeIdentityMatrix4x4();
+        return Identity;
+    }
+
+    Matrix4x4 MatrixMultiply4x4(const Matrix4x4& A, const Matrix4x4& B)
+    {
+        Matrix4x4 Out{};
+        for (int32 r = 0; r < 4; ++r)
+        {
+            for (int32 c = 0; c < 4; ++c)
+            {
+                float Value = 0.0f;
+                for (int32 k = 0; k < 4; ++k)
+                {
+                    Value += A.m[r][k] * B.m[k][c];
+                }
+                Out.m[r][c] = Value;
+            }
+        }
+        return Out;
+    }
+
+    Matrix4x4 MatrixInverse4x4(const Matrix4x4& In)
+    {
+        Matrix4x4 Temp = In;
+        Matrix4x4 Inv = IdentityMatrix4x4();
+
+        for (int32 Pivot = 0; Pivot < 4; ++Pivot)
+        {
+            int32 PivotRow = Pivot;
+            float MaxAbs = std::fabs(Temp.m[Pivot][Pivot]);
+            for (int32 Row = Pivot + 1; Row < 4; ++Row)
+            {
+                float Val = std::fabs(Temp.m[Row][Pivot]);
+                if (Val > MaxAbs)
+                {
+                    MaxAbs = Val;
+                    PivotRow = Row;
+                }
+            }
+
+            if (MaxAbs < 1e-8f)
+            {
+                return IdentityMatrix4x4();
+            }
+
+            if (PivotRow != Pivot)
+            {
+                for (int32 Col = 0; Col < 4; ++Col)
+                {
+                    std::swap(Temp.m[Pivot][Col], Temp.m[PivotRow][Col]);
+                    std::swap(Inv.m[Pivot][Col], Inv.m[PivotRow][Col]);
+                }
+            }
+
+            const float Diag = Temp.m[Pivot][Pivot];
+            const float InvDiag = 1.0f / Diag;
+            for (int32 Col = 0; Col < 4; ++Col)
+            {
+                Temp.m[Pivot][Col] *= InvDiag;
+                Inv.m[Pivot][Col] *= InvDiag;
+            }
+
+            for (int32 Row = 0; Row < 4; ++Row)
+            {
+                if (Row == Pivot)
+                    continue;
+                const float Factor = Temp.m[Row][Pivot];
+                if (std::fabs(Factor) < 1e-8f)
+                    continue;
+                for (int32 Col = 0; Col < 4; ++Col)
+                {
+                    Temp.m[Row][Col] -= Factor * Temp.m[Pivot][Col];
+                    Inv.m[Row][Col] -= Factor * Inv.m[Pivot][Col];
+                }
+            }
+        }
+
+        return Inv;
+    }
+}
+
 USkeletalMeshComponent::USkeletalMeshComponent()
 {
+    bCanEverTick = true;
     // Set default skeletal mesh (T-pose) using relative data dir
     extern const FString GDataDir;
     SetSkeletalMesh(GDataDir + "/Model/Ch46_nonPBR.fbx");
@@ -28,6 +133,31 @@ USkeletalMeshComponent::USkeletalMeshComponent()
 USkeletalMeshComponent::~USkeletalMeshComponent()
 {
     ClearDynamicMaterials();
+    if (SkinnedVertexBuffer) { SkinnedVertexBuffer->Release(); SkinnedVertexBuffer = nullptr; }
+}
+
+void USkeletalMeshComponent::TickComponent(float DeltaTime)
+{
+    Super::TickComponent(DeltaTime);
+
+    if (!IsActive() || !IsTickEnabled())
+    {
+        return;
+    }
+
+    USkeletalMesh* Mesh = GetSkeletalMesh();
+    if (!Mesh)
+        return;
+
+    FSkeletalMesh* Asset = Mesh->GetSkeletalMeshAsset();
+    if (!Asset)
+        return;
+
+    EnsureBonePoseCache(Asset);
+    if (bBonePoseDirty)
+    {
+        RebuildBonePose(Asset);
+    }
 }
 
 void USkeletalMeshComponent::ClearDynamicMaterials()
@@ -119,7 +249,9 @@ void USkeletalMeshComponent::CollectMeshBatches(TArray<FMeshBatchElement>& OutMe
         }
 
         Batch.Material = MaterialToUse;
-        Batch.VertexBuffer = Mesh->GetVertexBuffer();
+        // Ensure CPU-skinned dynamic VB is updated and use it for rendering
+        UpdateCpuSkinnedVertexBuffer();
+        Batch.VertexBuffer = SkinnedVertexBuffer ? SkinnedVertexBuffer : Mesh->GetVertexBuffer();
         Batch.IndexBuffer = Mesh->GetIndexBuffer();
         Batch.VertexStride = sizeof(FVertexDynamic);
         Batch.IndexCount = IndexCount;
@@ -224,6 +356,299 @@ void USkeletalMeshComponent::SetMaterialScalarByUser(const uint32 InMaterialSlot
     }
     if (MID)
         MID->SetScalarParameterValue(ParameterName, Value);
+}
+
+static inline Vector3 TransformVectorNoTranslation(const Matrix4x4& M, const Vector3& v)
+{
+    return {
+        M.m[0][0] * v.x + M.m[0][1] * v.y + M.m[0][2] * v.z,
+        M.m[1][0] * v.x + M.m[1][1] * v.y + M.m[1][2] * v.z,
+        M.m[2][0] * v.x + M.m[2][1] * v.y + M.m[2][2] * v.z
+    };
+}
+
+void USkeletalMeshComponent::UpdateCpuSkinnedVertexBuffer()
+{
+    USkeletalMesh* Mesh = GetSkeletalMesh();
+    if (!Mesh) return;
+    FSkeletalMesh* Asset = Mesh->GetSkeletalMeshAsset();
+    if (!Asset) return;
+
+    EnsureBonePoseCache(Asset);
+    if (bBonePoseDirty)
+    {
+        RebuildBonePose(Asset);
+    }
+
+    const size_t VertexCount = Asset->Vertices.size();
+    if (VertexCount == 0) return;
+
+    // Prepare skinned vertices in CPU memory
+    // We will either create the dynamic VB once, or update it each frame via Map/Unmap
+    bool bNeedRecreate = (SkinnedVertexBuffer == nullptr) || (SkinnedVertexCount != (uint32)VertexCount);
+
+    ID3D11Device* Device = UResourceManager::GetInstance().GetDevice();
+    ID3D11DeviceContext* Context = UResourceManager::GetInstance().GetDeviceContext();
+    if (!Device || !Context) return;
+
+    // If we are creating for the first time, leverage the existing helper that converts FNormalVertex->FVertexDynamic
+    if (bNeedRecreate)
+    {
+        if (SkinnedVertexBuffer) { SkinnedVertexBuffer->Release(); SkinnedVertexBuffer = nullptr; }
+
+        std::vector<FNormalVertex> Temp;
+        Temp.resize(VertexCount);
+
+        for (size_t i = 0; i < VertexCount; ++i)
+        {
+            const FSkinnedVertex& SV = Asset->Vertices[i];
+
+            // Position skinning
+            Vector3 p{ SV.pos.X, SV.pos.Y, SV.pos.Z };
+            Vector3 skinnedP{ 0, 0, 0 };
+
+            // Normal skinning
+            Vector3 n{ SV.normal.X, SV.normal.Y, SV.normal.Z };
+            Vector3 skinnedN{ 0, 0, 0 };
+
+            for (int s = 0; s < 4; ++s)
+            {
+                const float w = SV.boneWeights[s];
+                const int bi = SV.boneIndices[s];
+                if (w <= 0.0f) continue;
+                if (bi < 0 || bi >= (int)Asset->Bones.size()) continue;
+
+                const Matrix4x4& SkinMatrix = GetSkinningMatrixForIndex(Asset, bi);
+                const Vector3 tp = SkinMatrix.TransformPosition(p);
+                const Vector3 tn = TransformVectorNoTranslation(SkinMatrix, n);
+                skinnedP = skinnedP + (tp * w);
+                skinnedN = skinnedN + (tn * w);
+            }
+
+            // Normalize normal
+            float len = std::sqrt(skinnedN.x * skinnedN.x + skinnedN.y * skinnedN.y + skinnedN.z * skinnedN.z);
+            if (len > 1e-6f) { skinnedN.x /= len; skinnedN.y /= len; skinnedN.z /= len; }
+            else { skinnedN = { 0,0,1 }; }
+
+            FNormalVertex v{};
+            v.pos = FVector(skinnedP.x, skinnedP.y, skinnedP.z);
+            v.normal = FVector(skinnedN.x, skinnedN.y, skinnedN.z);
+            v.tex = SV.uv;
+            v.Tangent = FVector4(0, 0, 0, 0);
+            v.color = FVector4(1, 1, 1, 1);
+            Temp[i] = v;
+        }
+
+        // Create dynamic vertex buffer with CPU write access
+        HRESULT hr = D3D11RHI::CreateVertexBufferImpl<FVertexDynamic>(Device, Temp, &SkinnedVertexBuffer, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
+        if (SUCCEEDED(hr))
+        {
+            SkinnedVertexCount = static_cast<uint32>(VertexCount);
+        }
+        else
+        {
+            // Fallback: leave buffer null and let renderer use bind-pose VB
+            if (SkinnedVertexBuffer) { SkinnedVertexBuffer->Release(); SkinnedVertexBuffer = nullptr; }
+            SkinnedVertexCount = 0;
+        }
+        return;
+    }
+
+    // Update path: map and write FVertexDynamic directly
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (SUCCEEDED(Context->Map(SkinnedVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) && mapped.pData)
+    {
+        FVertexDynamic* out = reinterpret_cast<FVertexDynamic*>(mapped.pData);
+        for (size_t i = 0; i < VertexCount; ++i)
+        {
+            const FSkinnedVertex& SV = Asset->Vertices[i];
+            Vector3 p{ SV.pos.X, SV.pos.Y, SV.pos.Z };
+            Vector3 skinnedP{ 0, 0, 0 };
+            Vector3 n{ SV.normal.X, SV.normal.Y, SV.normal.Z };
+            Vector3 skinnedN{ 0, 0, 0 };
+            for (int s = 0; s < 4; ++s)
+            {
+                const float w = SV.boneWeights[s];
+                const int bi = SV.boneIndices[s];
+                if (w <= 0.0f) continue;
+                if (bi < 0 || bi >= (int)Asset->Bones.size()) continue;
+                const Matrix4x4& SkinMatrix = GetSkinningMatrixForIndex(Asset, bi);
+                const Vector3 tp = SkinMatrix.TransformPosition(p);
+                const Vector3 tn = TransformVectorNoTranslation(SkinMatrix, n);
+                skinnedP = skinnedP + (tp * w);
+                skinnedN = skinnedN + (tn * w);
+            }
+
+            float len = std::sqrt(skinnedN.x * skinnedN.x + skinnedN.y * skinnedN.y + skinnedN.z * skinnedN.z);
+            if (len > 1e-6f) { skinnedN.x /= len; skinnedN.y /= len; skinnedN.z /= len; }
+            else { skinnedN = { 0,0,1 }; }
+
+            out[i].Position = FVector(skinnedP.x, skinnedP.y, skinnedP.z);
+            out[i].Normal = FVector(skinnedN.x, skinnedN.y, skinnedN.z);
+            out[i].UV = SV.uv;
+            out[i].Tangent = FVector4(0, 0, 0, 0);
+            out[i].Color = FVector4(1, 1, 1, 1);
+        }
+        Context->Unmap(SkinnedVertexBuffer, 0);
+    }
+}
+
+void USkeletalMeshComponent::EnsureBonePoseCache(FSkeletalMesh* Asset)
+{
+    if (CachedPoseAsset == Asset)
+    {
+        return;
+    }
+    CachedPoseAsset = Asset;
+    InitializeBonePoseCache(Asset);
+}
+
+void USkeletalMeshComponent::InitializeBonePoseCache(FSkeletalMesh* Asset)
+{
+    ReferenceLocalPose.Empty();
+    BoneLocalPose.Empty();
+    BoneComponentPose.Empty();
+    BoneSkinningPose.Empty();
+    BoneEvaluationState.Empty();
+    bBonePoseDirty = true;
+
+    if (!Asset)
+    {
+        return;
+    }
+
+    const int32 BoneCount = Asset->Bones.Num();
+    ReferenceLocalPose.SetNum(BoneCount);
+    BoneLocalPose.SetNum(BoneCount);
+    BoneComponentPose.SetNum(BoneCount);
+    BoneSkinningPose.SetNum(BoneCount);
+    BoneEvaluationState.SetNum(BoneCount);
+    std::fill(BoneEvaluationState.begin(), BoneEvaluationState.end(), 0);
+
+    for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+    {
+        const Bone& SrcBone = Asset->Bones[BoneIndex];
+        Matrix4x4 Local = SrcBone.BoneTransform;
+        const int32 ParentIndex = SrcBone.ParentIndex;
+        if (ParentIndex >= 0 && ParentIndex < BoneCount)
+        {
+            const Matrix4x4& ParentGlobal = Asset->Bones[ParentIndex].BoneTransform;
+            Matrix4x4 ParentInverse = MatrixInverse4x4(ParentGlobal);
+            Local = MatrixMultiply4x4(SrcBone.BoneTransform, ParentInverse);
+        }
+
+        ReferenceLocalPose[BoneIndex] = Local;
+        BoneLocalPose[BoneIndex] = Local;
+        BoneComponentPose[BoneIndex] = SrcBone.BoneTransform;
+        BoneSkinningPose[BoneIndex] = MatrixMultiply4x4(Asset->Bones[BoneIndex].InverseBindPose, SrcBone.BoneTransform);
+    }
+}
+
+void USkeletalMeshComponent::RebuildBonePose(FSkeletalMesh* Asset)
+{
+    if (!Asset || BoneLocalPose.IsEmpty())
+    {
+        return;
+    }
+
+    const int32 BoneCount = BoneLocalPose.Num();
+    if (BoneEvaluationState.Num() != BoneCount)
+    {
+        BoneEvaluationState.SetNum(BoneCount);
+    }
+    std::fill(BoneEvaluationState.begin(), BoneEvaluationState.end(), 0);
+
+    for (int32 BoneIndex = 0; BoneIndex < BoneCount; ++BoneIndex)
+    {
+        BuildComponentSpaceBone(Asset, BoneIndex);
+    }
+
+    bBonePoseDirty = false;
+}
+
+Matrix4x4 USkeletalMeshComponent::BuildComponentSpaceBone(FSkeletalMesh* Asset, int32 BoneIndex)
+{
+    if (!Asset || BoneIndex < 0 || BoneIndex >= BoneLocalPose.Num())
+    {
+        return IdentityMatrix4x4();
+    }
+
+    if (!BoneEvaluationState.IsEmpty())
+    {
+        if (BoneEvaluationState[BoneIndex] == 2)
+        {
+            return BoneComponentPose[BoneIndex];
+        }
+
+        if (BoneEvaluationState[BoneIndex] == 1)
+        {
+            return BoneComponentPose[BoneIndex];
+        }
+
+        BoneEvaluationState[BoneIndex] = 1;
+    }
+
+    Matrix4x4 Global = BoneLocalPose[BoneIndex];
+    const int32 ParentIndex = Asset->Bones[BoneIndex].ParentIndex;
+    if (ParentIndex >= 0 && ParentIndex < BoneLocalPose.Num())
+    {
+        const Matrix4x4 ParentGlobal = BuildComponentSpaceBone(Asset, ParentIndex);
+        Global = MatrixMultiply4x4(Global, ParentGlobal);
+    }
+
+    BoneComponentPose[BoneIndex] = Global;
+    BoneSkinningPose[BoneIndex] = MatrixMultiply4x4(Asset->Bones[BoneIndex].InverseBindPose, Global);
+    if (!BoneEvaluationState.IsEmpty())
+    {
+        BoneEvaluationState[BoneIndex] = 2;
+    }
+    return Global;
+}
+
+const Matrix4x4& USkeletalMeshComponent::GetSkinningMatrixForIndex(FSkeletalMesh* Asset, int32 BoneIndex) const
+{
+    if (!BoneSkinningPose.IsEmpty() && BoneIndex >= 0 && BoneIndex < BoneSkinningPose.Num())
+    {
+        return BoneSkinningPose[BoneIndex];
+    }
+
+    if (Asset && BoneIndex >= 0 && BoneIndex < Asset->Bones.Num())
+    {
+        const Bone& SrcBone = Asset->Bones[BoneIndex];
+        static thread_local Matrix4x4 TempSkinMatrix;
+        TempSkinMatrix = MatrixMultiply4x4(SrcBone.InverseBindPose, SrcBone.BoneTransform);
+        return TempSkinMatrix;
+    }
+
+    return IdentityMatrix4x4();
+}
+
+void USkeletalMeshComponent::SetBoneLocalTransform(int32 BoneIndex, const Matrix4x4& InLocalTransform)
+{
+    USkeletalMesh* Mesh = GetSkeletalMesh();
+    if (!Mesh)
+        return;
+
+    FSkeletalMesh* Asset = Mesh->GetSkeletalMeshAsset();
+    if (!Asset)
+        return;
+
+    EnsureBonePoseCache(Asset);
+    if (BoneIndex < 0 || BoneIndex >= BoneLocalPose.Num())
+        return;
+
+    BoneLocalPose[BoneIndex] = InLocalTransform;
+    bBonePoseDirty = true;
+}
+
+void USkeletalMeshComponent::ResetBoneLocalTransforms()
+{
+    if (ReferenceLocalPose.IsEmpty())
+    {
+        return;
+    }
+    BoneLocalPose = ReferenceLocalPose;
+    bBonePoseDirty = true;
 }
 
 void USkeletalMeshComponent::DuplicateSubObjects()

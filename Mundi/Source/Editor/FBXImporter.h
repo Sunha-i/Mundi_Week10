@@ -18,6 +18,7 @@ static uint8 QuantizeWeight(float Weight)
     float Clamped = std::clamp(Weight, 0.0f, 1.0f);
     return static_cast<uint8>(std::round(Clamped * 255.0f));
 }
+static float unitToMeters = 0.01f;
 
 // ============================================================================
 // FFBXImporter

@@ -80,7 +80,8 @@ FSkeletalMesh* FFBXManager::LoadFBXSkeletalMeshAsset(const FString& PathFileName
 	// [0] 캐시 파일 경로 계산 및 디렉토리 준비
 	// ────────────────────────────────────────────────
 	FString CacheBase = ConvertDataPathToCachePath(NormalizedPath);
-    const FString BinPath = CacheBase + ".skel.v4.bin";
+    // Bump cache version when import format/scale changes
+    const FString BinPath = CacheBase + ".skel.bin";
 
 	fs::path BinFs(BinPath);
 	if (BinFs.has_parent_path())
