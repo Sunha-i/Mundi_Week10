@@ -1,77 +1,13 @@
 ﻿#pragma once
-#include "MeshComponent.h"
-#include "AABB.h"
+#include "SkinnedMeshComponent.h"
 
-class USkeletalMesh;
-class UShader;
-class UTexture;
-class UMaterialInterface;
-class UMaterialInstanceDynamic;
-struct FSceneCompData;
-
-class USkeletalMeshComponent : public UMeshComponent
+class USkeletalMeshComponent : public USkinnedMeshComponent
 {
-public:
-    DECLARE_CLASS(USkeletalMeshComponent, UMeshComponent)
+    DECLARE_CLASS(USkeletalMeshComponent, USkinnedMeshComponent)
     GENERATED_REFLECTION_BODY()
-
-    USkeletalMeshComponent();
-
-protected:
-    ~USkeletalMeshComponent() override;
-    void ClearDynamicMaterials();
-
-public :
-    // void OnStaticMeshReleased(UStaticMesh* ReleasedMesh);
-
-    void CollectMeshBatches(
-        TArray<FMeshBatchElement>& OutMeshBatchElements,
-        const FSceneView* View
-    ) override;
-
-    void Serialize(
-        const bool bInIsLoading,
-        JSON& InOutHandle
-    ) override;
-
-    void SetSkeletalMesh(const FString& PathFileName);
-
-    USkeletalMesh* GetSkeletalMesh() const;
-
-    UMaterialInterface* GetMaterial(uint32 InSectionIndex) const override;
-    void SetMaterial(uint32 InElementIndex, UMaterialInterface* InNewMaterial) override;
-    
-    UMaterialInstanceDynamic* CreateAndSetMaterialInstanceDynamic(uint32 ElementIndex);
-    
-    const TArray<UMaterialInterface*> GetMaterialSlots() const;
-    
-    void SetMaterialTextureByUser(
-        const uint32 InMaterialSlotIndex,
-        EMaterialTextureSlot Slot,
-        UTexture* Texture
-    );
-    void SetMaterialColorByUser(
-        const uint32 InMaterialSlotIndex,
-        const FString& ParameterName,
-        const FLinearColor& Value
-    );
-    void SetMaterialScalarByUser(
-        const uint32 InMaterialSlotIndex,
-        const FString& ParameterName,
-        float Value
-    );
-
-    FAABB GetWorldAABB() const override;
-
-    DECLARE_DUPLICATE(USkeletalMeshComponent)
-    void DuplicateSubObjects() override;
+public:
+    USkeletalMeshComponent() = default;
 
 protected:
-    void OnTransformUpdated() override;
-    void MarkWorldPartitionDirty();
-
-protected:
-    USkeletalMesh* SkeletalMesh = nullptr;
-    TArray<UMaterialInterface*> MaterialSlots;
-    TArray<UMaterialInstanceDynamic*> DynamicMaterialInstances;
+    ~USkeletalMeshComponent() override = default;
 };
