@@ -515,6 +515,39 @@
     <ClCompile Include="Source\Runtime\Engine\Scripting\LuaComponentProxy.cpp">
       <Filter>Source\Runtime\Engine\Scripting</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Runtime\AssetManagement\SkeletalMesh.cpp">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\AssetManagement\SkeletalMeshStruct.cpp">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\GameFramework\SkeletalMeshActor.cpp">
+      <Filter>Source\Runtime\Engine\GameFramework</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\Components\SkeletalMeshComponent.cpp">
+      <Filter>Source\Runtime\Engine\Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\Engine\Components\SkinnedMeshComponent.cpp">
+      <Filter>Source\Runtime\Engine\Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\FbxDebugLog.cpp">
+      <Filter>Source\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\FbxManager.cpp">
+      <Filter>Source\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\AssetManagement\Bone.cpp">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\AssetManagement\Flesh.cpp">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\AssetManagement\Skeleton.cpp">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Runtime\AssetManagement\MeshBase.cpp">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -1117,6 +1150,39 @@
     </ClInclude>
     <ClInclude Include="Source\Runtime\Engine\Scripting\LuaComponentProxy.h">
       <Filter>Source\Runtime\Engine\Scripting</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\AssetManagement\SkeletalMesh.h">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\AssetManagement\SkeletalMeshStruct.h">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\GameFramework\SkeletalMeshActor.h">
+      <Filter>Source\Runtime\Engine\GameFramework</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\Components\SkeletalMeshComponent.h">
+      <Filter>Source\Runtime\Engine\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\Engine\Components\SkinnedMeshComponent.h">
+      <Filter>Source\Runtime\Engine\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\FbxDebugLog.h">
+      <Filter>Source\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\FbxManager.h">
+      <Filter>Source\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\AssetManagement\Bone.h">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\AssetManagement\Flesh.h">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\AssetManagement\Skeleton.h">
+      <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Runtime\AssetManagement\MeshBase.h">
+      <Filter>Source\Runtime\AssetManagement</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
