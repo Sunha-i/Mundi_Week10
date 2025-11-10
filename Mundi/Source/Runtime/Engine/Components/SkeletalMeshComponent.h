@@ -35,4 +35,11 @@ public:
     void SetMaterialTextureByUser(const uint32 InMaterialSlotIndex, EMaterialTextureSlot Slot, UTexture* Texture);
     void SetMaterialColorByUser(const uint32 InMaterialSlotIndex, const FString& ParameterName, const FLinearColor& Value);
     void SetMaterialScalarByUser(const uint32 InMaterialSlotIndex, const FString& ParameterName, float Value);
+
+    // Persist materials like StaticMeshComponent
+    void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
+    virtual void DuplicateSubObjects() override;
+
+private:
+    void ClearDynamicMaterials();
 };

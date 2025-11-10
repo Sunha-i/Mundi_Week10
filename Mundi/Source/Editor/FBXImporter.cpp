@@ -388,60 +388,61 @@ void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
         }
         // 4슬롯만 사용
     }
-
     UE_LOG("ProcessSkin 완료: Bones=%d, SkinnedVertices=%d", Bones.Num(), SkinnedVertices.Num());
-
 }
 
-
 // ============================================================================
-// ProcessMesh()
-// ----------------------------------------------------------------------------
-//  FbxMesh 객체에서 정점(Position), 노멀(Normal), UV 정보를 추출한다.
-//  - 모든 폴리곤을 순회하며, 각 버텍스를 변환
-// ============================================================================
-// ============================================================================
-// FBX Mesh 처리 함수
-//  - 위치, 노멀, UV를 읽어와 내부 포맷으로 변환
+// ProcessMesh
+//  - FBX 메쉬 데이터를 읽어와 내부 포맷으로 변환
+//  - 위치(Position), 노멀(Normal), UV 좌표를 추출하여 저장
 // ============================================================================
 void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
 {
-    if (!Mesh) return;
+    if (!Mesh)
+        return;
 
     // ------------------------------------------------------------------------
-    // 기본 정보 추출
+    // 기본 메쉬 정보 추출
     // ------------------------------------------------------------------------
     const int ControlPointCount = Mesh->GetControlPointsCount();
     const FbxVector4* ControlPoints = Mesh->GetControlPoints();
     const int PolygonCount = Mesh->GetPolygonCount();
 
-    // 첫 번째 UVSet 이름만 사용 (일반적으로 map1 또는 UVMap)
+    // 첫 번째 UVSet 이름 사용 (일반적으로 map1 또는 UVMap)
     const char* UvSetName = GetFirstUVSetName(Mesh);
-    const bool bHasUV = (UvSetName != nullptr);
+    const bool HasUV = (UvSetName != nullptr);
 
     // 스킨 정점 배열 크기 보장
     if ((int)SkinnedVertices.size() < ControlPointCount)
         SkinnedVertices.resize(ControlPointCount);
 
     // ------------------------------------------------------------------------
-    // 폴리곤 순회 (삼각형 기준)
+    // 폴리곤 순회 (FBX는 n각형도 존재하지만 Triangulate() 이후라면 삼각형만 존재)
     // ------------------------------------------------------------------------
     for (int PolyIndex = 0; PolyIndex < PolygonCount; ++PolyIndex)
     {
         const int PolySize = Mesh->GetPolygonSize(PolyIndex);
-        const int baseCorner = (int)CornerControlPointIndices.size();
+        const int BaseCorner = (int)CornerControlPointIndices.size();
 
+        // 각 폴리곤의 코너(vertex per polygon) 순회
         for (int Corner = 0; Corner < PolySize; ++Corner)
         {
-            // ----- ControlPoint (정점 좌표) -----
+            // ----------------------------------------------------------------
+            // 1) 위치(Position)
+            // ----------------------------------------------------------------
             const int ControlPointIndex = Mesh->GetPolygonVertex(PolyIndex, Corner);
             if (ControlPointIndex < 0 || ControlPointIndex >= ControlPointCount)
                 continue;
 
             const FbxVector4& P = ControlPoints[ControlPointIndex];
-            SkinnedVertices[ControlPointIndex].pos = FVector((float)P[0], (float)P[1], (float)P[2]);
+            SkinnedVertices[ControlPointIndex].pos = FVector(
+                (float)P[0],
+                (float)P[1],
+                (float)P[2]);
 
-            // ----- Normal -----
+            // ----------------------------------------------------------------
+            // 2) 노멀(Normal)
+            // ----------------------------------------------------------------
             FVector NormalOut(0, 0, 1);
             {
                 FbxVector4 N(0, 0, 1, 0);
@@ -452,64 +453,77 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
                 }
             }
 
-            // ----- UV -----
+            // ----------------------------------------------------------------
+            // 3) UV 좌표 (Texture Coordinate)
+            // ----------------------------------------------------------------
             FVector2D UVOut(0.0f, 0.0f);
-            if (bHasUV)
+
+            if (HasUV)
             {
                 FbxVector2 UV(0.0, 0.0);
-                bool bUnmapped = false;
+                bool Unmapped = false;
 
-                // 1️⃣ FBX SDK 기본 헬퍼 (가장 안전함)
-                if (Mesh->GetPolygonVertexUV(PolyIndex, Corner, UvSetName, UV, bUnmapped) && !bUnmapped)
+                // (1) FBX SDK 헬퍼 함수 사용 — 가장 안전하고 일반적인 접근 방식
+                if (Mesh->GetPolygonVertexUV(PolyIndex, Corner, UvSetName, UV, Unmapped) && !Unmapped)
                 {
                     UVOut = FVector2D((float)UV[0], 1.0f - (float)UV[1]);
                 }
-                // 2️⃣ 폴백: 직접 UV 배열 접근
+                // (2) 폴백 — UV 요소를 직접 접근 (MappingMode / ReferenceMode 별 처리)
                 else if (const FbxGeometryElementUV* UvElem = Mesh->GetElementUV(UvSetName))
                 {
-                    const auto mapMode = UvElem->GetMappingMode();
-                    const auto refMode = UvElem->GetReferenceMode();
+                    const auto MapMode = UvElem->GetMappingMode();
+                    const auto RefMode = UvElem->GetReferenceMode();
 
-                    if (mapMode == FbxGeometryElement::eByControlPoint)
+                    // ControlPoint 기반 매핑
+                    if (MapMode == FbxGeometryElement::eByControlPoint)
                     {
-                        int cp = ControlPointIndex;
-                        int idx = (refMode == FbxGeometryElement::eIndexToDirect)
-                            ? UvElem->GetIndexArray().GetAt(cp)
-                            : cp;
+                        int Cp = ControlPointIndex;
+                        int Idx = (RefMode == FbxGeometryElement::eIndexToDirect)
+                            ? UvElem->GetIndexArray().GetAt(Cp)
+                            : Cp;
 
-                        if (idx >= 0 && idx < UvElem->GetDirectArray().GetCount())
+                        if (Idx >= 0 && Idx < UvElem->GetDirectArray().GetCount())
                         {
-                            FbxVector2 uv = UvElem->GetDirectArray().GetAt(idx);
-                            UVOut = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
+                            FbxVector2 Uv = UvElem->GetDirectArray().GetAt(Idx);
+                            UVOut = FVector2D((float)Uv[0], 1.0f - (float)Uv[1]);
                         }
                     }
-                    else if (mapMode == FbxGeometryElement::eByPolygonVertex)
+                    // PolygonVertex 기반 매핑
+                    else if (MapMode == FbxGeometryElement::eByPolygonVertex)
                     {
-                        int vertexId = Mesh->GetTextureUVIndex(PolyIndex, Corner);
-                        if (vertexId >= 0 && vertexId < UvElem->GetDirectArray().GetCount())
+                        int VertexId = Mesh->GetTextureUVIndex(PolyIndex, Corner);
+                        if (VertexId >= 0 && VertexId < UvElem->GetDirectArray().GetCount())
                         {
-                            FbxVector2 uv = UvElem->GetDirectArray().GetAt(vertexId);
-                            UVOut = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
+                            FbxVector2 Uv = UvElem->GetDirectArray().GetAt(VertexId);
+                            UVOut = FVector2D((float)Uv[0], 1.0f - (float)Uv[1]);
                         }
                     }
                 }
             }
 
-            // ----- 데이터 저장 -----
+            // ----------------------------------------------------------------
+            // 4) 추출된 데이터 저장
+            // ----------------------------------------------------------------
             CornerControlPointIndices.push_back((uint32)ControlPointIndex);
             CornerNormals.push_back(NormalOut);
             CornerUVs.push_back(UVOut);
         }
 
-        // ----- 삼각형 인덱스 추가 -----
+        // --------------------------------------------------------------------
+        // 삼각형 인덱스 추가 (Triangulate() 된 상태 기준)
+        // --------------------------------------------------------------------
         if (PolySize == 3)
         {
-            TriangleCornerIndices.push_back((uint32)baseCorner + 0);
-            TriangleCornerIndices.push_back((uint32)baseCorner + 1);
-            TriangleCornerIndices.push_back((uint32)baseCorner + 2);
+            TriangleCornerIndices.push_back((uint32)BaseCorner + 0);
+            TriangleCornerIndices.push_back((uint32)BaseCorner + 1);
+            TriangleCornerIndices.push_back((uint32)BaseCorner + 2);
         }
     }
 
-    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, Corners=%d, UVSet=%s",
-        PolygonCount, ControlPointCount, (int)CornerControlPointIndices.size(), UvSetName ? UvSetName : "None");
+    // ------------------------------------------------------------------------
+    // 처리 로그 출력
+    // ------------------------------------------------------------------------
+    UE_LOG("FFBXImporter - Mesh Processed | Polygons=%d | ControlPoints=%d | Corners=%d | UVSet=%s",
+        PolygonCount, ControlPointCount, (int)CornerControlPointIndices.size(),
+        UvSetName ? UvSetName : "None");
 }
