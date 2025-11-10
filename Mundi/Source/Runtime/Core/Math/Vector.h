@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "UEContainer.h"
+#include "Archive.h"
 #include "Vector.h"
 
 // 혹시 다른 헤더에서 새어 들어온 매크로 방지
@@ -658,6 +659,12 @@ private:
 // 스칼라 곱(전역)
 inline FQuat operator*(float Scalar, const FQuat& Quat) { return FQuat(Quat.X * Scalar, Quat.Y * Scalar, Quat.Z * Scalar, Quat.W * Scalar); }
 
+inline FArchive& operator<<(FArchive& Ar, FQuat& Q)
+{
+	Ar.Serialize(&Q.X, sizeof(float) * 4);
+	return Ar;
+}
+
 // ─────────────────────────────
 // FMatrix (4x4 Matrix)
 // (Row-major, Translation in M[row][3])
@@ -1299,6 +1306,14 @@ struct FTransform
 		return Output;
 	}
 };
+
+inline FArchive& operator<<(FArchive& Ar, FTransform& T)
+{
+	Ar << T.Translation;
+	Ar << T.Rotation;
+	Ar << T.Scale3D;
+	return Ar;
+}
 
 // ─────────────────────────────
 // Inline 구현부

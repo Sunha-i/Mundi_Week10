@@ -554,6 +554,9 @@
     <ClCompile Include="Source\Slate\Windows\SkeletalMeshViewerWindow.cpp">
       <Filter>Source\Slate\Windows</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Editor\FbxCache.cpp">
+      <Filter>Source\Editor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -1195,6 +1198,9 @@
     </ClInclude>
     <ClInclude Include="Source\Slate\Windows\SkeletalMeshViewerWindow.h">
       <Filter>Source\Slate\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\FbxCache.h">
+      <Filter>Source\Editor</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

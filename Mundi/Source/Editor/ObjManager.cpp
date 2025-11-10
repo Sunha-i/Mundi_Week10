@@ -981,3 +981,23 @@ FObjImporter::FFaceVertex FObjImporter::ParseVertexDef(const FString& InVertexDe
 
 	return Result;
 }
+
+// Getter/Setter implementations for external access
+void FObjManager::AddToCache(const FString& PathFileName, FStaticMesh* Mesh)
+{
+	if (Mesh)
+	{
+		FString NormalizedPath = NormalizePath(PathFileName);
+		ObjStaticMeshMap.Add(NormalizedPath, Mesh);
+	}
+}
+
+FStaticMesh* FObjManager::GetFromCache(const FString& PathFileName)
+{
+	FString NormalizedPath = NormalizePath(PathFileName);
+	if (FStaticMesh** Found = ObjStaticMeshMap.Find(NormalizedPath))
+	{
+		return *Found;
+	}
+	return nullptr;
+}
