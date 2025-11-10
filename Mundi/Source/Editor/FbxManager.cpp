@@ -82,42 +82,92 @@ FFbxManager& FFbxManager::GetInstance()
 
 void FFbxManager::Preload()
 {
-	const fs::path FbxDir(GFbxDataDir);
+    UE_LOG("==========================================");
+    UE_LOG("FFbxManager::Preload STARTED");
+    UE_LOG("==========================================");
 
-	if (!fs::exists(FbxDir) || !fs::is_directory(FbxDir))
-	{
-		UE_LOG("FFbxManager::Preload: FBX directory not found: %s", FbxDir.string().c_str());
-		return;
-	}
+    const fs::path FbxDir(GFbxDataDir);
+    UE_LOG("[FBX Preload] GFbxDataDir = %s", GFbxDataDir.c_str());
 
-	size_t LoadedCount = 0;
-	std::unordered_set<FString> ProcessedFiles; // 중복 로딩 방지
+    if (!fs::exists(FbxDir) || !fs::is_directory(FbxDir))
+    {
+        UE_LOG("[FBX Preload ERROR] FBX directory not found: %s", FbxDir.string().c_str());
+        return;
+    }
 
-	for (const auto& Entry : fs::recursive_directory_iterator(FbxDir))
-	{
-		if (!Entry.is_regular_file())
-			continue;
+    UE_LOG("[FBX Preload] Directory exists, scanning recursively...");
 
-		const fs::path& Path = Entry.path();
-		FString Extension = Path.extension().string();
-		std::transform(Extension.begin(), Extension.end(), Extension.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    size_t LoadedCount = 0;
+    size_t TotalFilesScanned = 0;
+    std::unordered_set<FString> ProcessedFiles; // 중복 로딩 방지
 
-		if (Extension == ".fbx")
-		{
-			FString PathStr = NormalizePath(Path.string());
+    UE_LOG("[FBX Preload] Starting recursive directory scan...");
 
-			// 이미 처리된 파일인지 확인
-			if (ProcessedFiles.find(PathStr) == ProcessedFiles.end())
-			{
-				ProcessedFiles.insert(PathStr);
-				LoadFbxSkeletalMeshAsset(PathStr);
-				++LoadedCount;
-			}
-		}
-	}
 
-	UE_LOG("FFbxManager::Preload: Loaded %zu .fbx files from %s", LoadedCount, FbxDir.string().c_str());
+    try
+    {
+        UE_LOG("[FBX Preload] Starting recursive_directory_iterator...");
+
+        for (const auto& Entry : fs::recursive_directory_iterator(FbxDir))
+        {
+            TotalFilesScanned++;
+
+            if (!Entry.is_regular_file())
+            {
+                continue;
+            }
+
+            const fs::path& Path = Entry.path();
+            FString Extension = Path.extension().string();
+            std::transform(Extension.begin(), Extension.end(), Extension.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+            if (Extension == ".fbx")
+            {
+                FString PathStr = NormalizePath(Path.string());
+                UE_LOG("[FBX Preload] Found FBX file: %s", PathStr.c_str());
+
+                // 이미 처리된 파일인지 확인
+                if (ProcessedFiles.find(PathStr) == ProcessedFiles.end())
+                {
+                    ProcessedFiles.insert(PathStr);
+                    UE_LOG("[FBX Preload] Loading: %s", PathStr.c_str());
+
+                    // FSkeletalMesh Asset 로드
+                    FSkeletalMesh* SkeletalMeshAsset = LoadFbxSkeletalMeshAsset(PathStr);
+
+                    // Skeleton이 있으면 USkeletalMesh 생성 및 ResourceManager 등록
+                    if (SkeletalMeshAsset && SkeletalMeshAsset->Skeleton)
+                    {
+                        USkeletalMesh* USkeletalMeshObj = NewObject<USkeletalMesh>();
+                        USkeletalMeshObj->SetFilePath(PathStr);
+                        USkeletalMeshObj->Load(PathStr, GEngine.GetRHIDevice()->GetDevice());
+                        UResourceManager::GetInstance().Add<USkeletalMesh>(PathStr, USkeletalMeshObj);
+                        UE_LOG("[FBX Preload] Registered USkeletalMesh to ResourceManager: %s", PathStr.c_str());
+                    }
+                    // Skeleton이 없으면 이미 StaticMesh로 변환되어 ResourceManager에 등록됨
+
+                    ++LoadedCount;
+                }
+                else
+                {
+                    UE_LOG("[FBX Preload] Skipped (already processed): %s", PathStr.c_str());
+                }
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        UE_LOG("[FBX Preload ERROR] Exception during scan: %s", e.what());
+        return;
+    }
+
+    UE_LOG("[FBX Preload] Scan complete. Total files scanned: %zu", TotalFilesScanned);
+
+    UE_LOG("==========================================");
+    UE_LOG("FFbxManager::Preload FINISHED");
+    UE_LOG("Loaded %zu .fbx files from %s", LoadedCount, FbxDir.string().c_str());
+    UE_LOG("==========================================");
 }
 
 void FFbxManager::Clear()
@@ -532,19 +582,71 @@ void FFbxManager::ExtractMeshData(FbxMesh* InMesh, FSkeletalMesh* OutSkeletalMes
 						static_cast<float>(Normal[2]));
 				}
 
-				// UV - DirectX는 V축이 위에서 아래로 증가
-				FbxStringList UVSetNames;
-				InMesh->GetUVSetNames(UVSetNames);
-				if (UVSetNames.GetCount() > 0)
-				{
-					FbxVector2 UV;
-					bool bUnmapped;
-					if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
-					{
-						Vertex.tex = FVector2D(static_cast<float>(UV[0]),
-							1.0f - static_cast<float>(UV[1]));
-					}
-				}
+                // Tangent - Z-Up RH to Z-Up LH: Y축 반전
+                FbxGeometryElementTangent* TangentElement = InMesh->GetElementTangent();
+                if (TangentElement)
+                {
+                    int TangentIndex = -1;
+                    int PolyVertIndex = InMesh->GetPolygonVertexIndex(PolyIdx) + LocalVertIdx;
+
+                    if (TangentElement->GetMappingMode() == FbxGeometryElement::eByPolygonVertex)
+                    {
+                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
+                        {
+                            TangentIndex = PolyVertIndex;
+                        }
+                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
+                        {
+                            TangentIndex = TangentElement->GetIndexArray().GetAt(PolyVertIndex);
+                        }
+                    }
+                    else if (TangentElement->GetMappingMode() == FbxGeometryElement::eByControlPoint)
+                    {
+                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
+                        {
+                            TangentIndex = ControlPointIdx;
+                        }
+                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
+                        {
+                            TangentIndex = TangentElement->GetIndexArray().GetAt(ControlPointIdx);
+                        }
+                    }
+
+                    if (TangentIndex >= 0 && TangentIndex < TangentElement->GetDirectArray().GetCount())
+                    {
+                        FbxVector4 Tangent = TangentElement->GetDirectArray().GetAt(TangentIndex);
+                        Vertex.Tangent = FVector4(
+                            static_cast<float>(Tangent[0]),
+                            static_cast<float>(-Tangent[1]),  // Y축 반전
+                            static_cast<float>(Tangent[2]),
+                            static_cast<float>(Tangent[3])    // W component (bitangent handedness)
+                        );
+                    }
+                    else
+                    {
+                        // Tangent 인덱스가 유효하지 않은 경우 기본값
+                        Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+                    }
+                }
+                else
+                {
+                    // Tangent Element가 없는 경우 기본값
+                    Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+                }
+
+                // UV - DirectX는 V축이 위에서 아래로 증가
+                FbxStringList UVSetNames;
+                InMesh->GetUVSetNames(UVSetNames);
+                if (UVSetNames.GetCount() > 0)
+                {
+                    FbxVector2 UV;
+                    bool bUnmapped;
+                    if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
+                    {
+                        Vertex.tex = FVector2D(static_cast<float>(UV[0]),
+                                               1.0f - static_cast<float>(UV[1]));
+                    }
+                }
 
 				// 버텍스 추가 및 인덱스 저장
 				uint32 VertexIndex = static_cast<uint32>(Vertices.size());
@@ -1063,19 +1165,71 @@ void FFbxManager::ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStati
 						static_cast<float>(Normal[2]));
 				}
 
-				// UV
-				FbxStringList UVSetNames;
-				InMesh->GetUVSetNames(UVSetNames);
-				if (UVSetNames.GetCount() > 0)
-				{
-					FbxVector2 UV;
-					bool bUnmapped;
-					if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
-					{
-						Vertex.tex = FVector2D(static_cast<float>(UV[0]),
-							1.0f - static_cast<float>(UV[1]));
-					}
-				}
+                // Tangent - Z-Up RH to Z-Up LH: Y축 반전
+                FbxGeometryElementTangent* TangentElement = InMesh->GetElementTangent();
+                if (TangentElement)
+                {
+                    int TangentIndex = -1;
+                    int PolyVertIndex = InMesh->GetPolygonVertexIndex(PolyIdx) + LocalVertIdx;
+
+                    if (TangentElement->GetMappingMode() == FbxGeometryElement::eByPolygonVertex)
+                    {
+                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
+                        {
+                            TangentIndex = PolyVertIndex;
+                        }
+                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
+                        {
+                            TangentIndex = TangentElement->GetIndexArray().GetAt(PolyVertIndex);
+                        }
+                    }
+                    else if (TangentElement->GetMappingMode() == FbxGeometryElement::eByControlPoint)
+                    {
+                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
+                        {
+                            TangentIndex = ControlPointIdx;
+                        }
+                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
+                        {
+                            TangentIndex = TangentElement->GetIndexArray().GetAt(ControlPointIdx);
+                        }
+                    }
+
+                    if (TangentIndex >= 0 && TangentIndex < TangentElement->GetDirectArray().GetCount())
+                    {
+                        FbxVector4 Tangent = TangentElement->GetDirectArray().GetAt(TangentIndex);
+                        Vertex.Tangent = FVector4(
+                            static_cast<float>(Tangent[0]),
+                            static_cast<float>(-Tangent[1]),  // Y축 반전
+                            static_cast<float>(Tangent[2]),
+                            static_cast<float>(Tangent[3])    // W component (bitangent handedness)
+                        );
+                    }
+                    else
+                    {
+                        // Tangent 인덱스가 유효하지 않은 경우 기본값
+                        Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+                    }
+                }
+                else
+                {
+                    // Tangent Element가 없는 경우 기본값
+                    Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+                }
+
+                // UV
+                FbxStringList UVSetNames;
+                InMesh->GetUVSetNames(UVSetNames);
+                if (UVSetNames.GetCount() > 0)
+                {
+                    FbxVector2 UV;
+                    bool bUnmapped;
+                    if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
+                    {
+                        Vertex.tex = FVector2D(static_cast<float>(UV[0]),
+                                               1.0f - static_cast<float>(UV[1]));
+                    }
+                }
 
 				uint32 VertexIndex = static_cast<uint32>(Vertices.size());
 				Vertices.Add(Vertex);

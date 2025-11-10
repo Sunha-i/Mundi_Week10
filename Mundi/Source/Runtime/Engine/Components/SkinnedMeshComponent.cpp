@@ -13,14 +13,10 @@ BEGIN_PROPERTIES(USkinnedMeshComponent)
     ADD_PROPERTY_ARRAY(EPropertyType::Material, MaterialSlots, "Materials", true)
 END_PROPERTIES()
 
-USkinnedMeshComponent::USkinnedMeshComponent()
-{
-    SetSkeletalMesh(GFbxDataDir + "/Yunsoo/Ch46_nonPBR.fbx");
-    //SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
-}
+USkinnedMeshComponent::USkinnedMeshComponent() {}
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
-{
+{ 
     if (SkeletalMesh)
         ObjectFactory::DeleteObject(SkeletalMesh);
     ClearDynamicMaterials();
@@ -263,8 +259,24 @@ void USkinnedMeshComponent::SetSkeletalMesh(const FString& PathFileName)
     // 새 메시를 설정하기 전에, 기존에 생성된 모든 MID와 슬롯 정보를 정리합니다.
     ClearDynamicMaterials();
 
+    // PathFileName이 비어있거나 "None"이면 nullptr로 설정
+    if (PathFileName.empty() || PathFileName == "None")
+    {
+        SkeletalMesh = nullptr;
+        return;
+    }
+
     // 새 메시를 로드합니다.
-    SkeletalMesh = UResourceManager::GetInstance().Load<USkeletalMesh>(PathFileName)->Duplicate();
+    USkeletalMesh* LoadedMesh = UResourceManager::GetInstance().Load<USkeletalMesh>(PathFileName);
+
+    if (LoadedMesh)
+    {
+        SkeletalMesh = LoadedMesh->Duplicate();
+    }
+    else
+    {
+        SkeletalMesh = nullptr;
+    }
 
     if (SkeletalMesh && SkeletalMesh->GetSkeletalMeshAsset())
     {
