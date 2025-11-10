@@ -13,11 +13,7 @@ BEGIN_PROPERTIES(USkinnedMeshComponent)
     ADD_PROPERTY_ARRAY(EPropertyType::Material, MaterialSlots, "Materials", true)
 END_PROPERTIES()
 
-USkinnedMeshComponent::USkinnedMeshComponent()
-{
-    SetSkeletalMesh(GFbxDataDir + "/Rogue/rogue_all.fbx");
-    //SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
-}
+USkinnedMeshComponent::USkinnedMeshComponent() {}
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
 {
