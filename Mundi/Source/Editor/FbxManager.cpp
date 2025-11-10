@@ -935,24 +935,26 @@ void FFbxManager::ExtractSkinningData(FbxMesh* InMesh, FFlesh& OutFlesh, const T
 }
 
 // Helper: FbxAMatrix를 FTransform으로 변환
+// Z-Up Right-Handed (FBX) → Z-Up Left-Handed (엔진) 변환
 FTransform FFbxManager::ConvertFbxTransform(const FbxAMatrix& InMatrix)
 {
     FTransform Result;
 
-    // Translation
+    // Translation - Z-Up RH to Z-Up LH: Y축 반전
     FbxVector4 Translation = InMatrix.GetT();
     Result.Translation = FVector(static_cast<float>(Translation[0]),
-                                  static_cast<float>(Translation[1]),
+                                  static_cast<float>(-Translation[1]),  // Y축 반전
                                   static_cast<float>(Translation[2]));
 
-    // Rotation (Quaternion)
+    // Rotation (Quaternion) - RH to LH: Y, Z 성분 반전
+    // RH → LH Quaternion 변환: Q(x, -y, -z, w)
     FbxQuaternion Rotation = InMatrix.GetQ();
     Result.Rotation = FQuat(static_cast<float>(Rotation[0]),
-                            static_cast<float>(Rotation[1]),
-                            static_cast<float>(Rotation[2]),
+                            static_cast<float>(-Rotation[1]),  // Y 반전
+                            static_cast<float>(-Rotation[2]),  // Z 반전
                             static_cast<float>(Rotation[3]));
 
-    // Scale
+    // Scale - 크기 값이므로 반전하지 않음
     FbxVector4 Scale = InMatrix.GetS();
     Result.Scale3D = FVector(static_cast<float>(Scale[0]),
                              static_cast<float>(Scale[1]),

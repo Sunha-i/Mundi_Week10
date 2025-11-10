@@ -175,14 +175,17 @@ const FTransform& UBone::GetWorldBindPose() const
 // BindPos와 현 Transform의 차이를 반환
 FTransform UBone::GetBoneOffset()
 {
-    FTransform WorldTransform = GetWorldTransform();
-    FTransform WorldBindPos = GetWorldBindPose();
-    FTransform BoneOffset;
+    // 올바른 Skinning Transform 계산:
+    // SkinningMatrix = CurrentWorldMatrix * Inverse(BindPoseWorldMatrix)
 
-    BoneOffset.Translation = WorldTransform.Translation - WorldBindPos.Translation;
-    BoneOffset.Rotation = FQuat::MakeFromEulerZYX(WorldTransform.Rotation.ToEulerZYXDeg() - WorldBindPos.Rotation.ToEulerZYXDeg());
-    BoneOffset.Scale3D = WorldTransform.Scale3D - WorldBindPos.Scale3D;
-        
+    FTransform WorldTransform = GetWorldTransform();
+    FTransform WorldBindPose = GetWorldBindPose();
+
+    // FTransform의 Relative 변환 기능 사용
+    // GetRelativeTransform(Parent)는 this = result * Parent 를 만족하는 result를 반환
+    // 즉, this * Inverse(Parent) = result
+    FTransform BoneOffset = WorldTransform.GetRelativeTransform(WorldBindPose);
+
     return BoneOffset;
 }
 
