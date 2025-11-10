@@ -15,7 +15,7 @@ END_PROPERTIES()
 
 USkinnedMeshComponent::USkinnedMeshComponent()
 {
-    SetSkeletalMesh(GFbxDataDir + "/Rogue/rogue_all.fbx");
+    SetSkeletalMesh(GFbxDataDir + "/Yunsoo/Ch46_nonPBR.fbx");
     //SetSkeletalMesh(GFbxDataDir + "/Survival/survival_character.fbx");
 }
 
