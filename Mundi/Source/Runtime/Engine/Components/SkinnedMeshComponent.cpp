@@ -16,7 +16,7 @@ END_PROPERTIES()
 USkinnedMeshComponent::USkinnedMeshComponent() {}
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
-{
+{ 
     if (SkeletalMesh)
         ObjectFactory::DeleteObject(SkeletalMesh);
     ClearDynamicMaterials();

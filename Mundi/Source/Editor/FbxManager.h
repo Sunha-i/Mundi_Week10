@@ -23,13 +23,31 @@ public:
 public:
     void Preload();
     void Clear();
+
+    // FBX Scene 관련
+    bool ValidateFbxFile(const FString& Path);
+    FbxScene* ImportFbxScene(const FString& Path);
+
     FSkeletalMesh* LoadFbxSkeletalMeshAsset(const FString& PathFileName);
+    // Material 관련
+    void CollectMaterials(FbxScene* Scene, TMap<int64, FMaterialInfo>& OutMatMap, TArray<FMaterialInfo>& OutMaterialInfos, const FString& Path);
+
+    // Skeleton 관련
+    UBone* FindSkeletonRoot(FbxNode* RootNode);
+
+    // Mesh 빌드 관련
+    FSkeletalMesh* BuildSkeletalMesh(FbxScene* Scene, FbxNode* RootNode, UBone* RootBone, const TMap<int64, FMaterialInfo>& MaterialMap, const FString& Path);
+    void BuildStaticMeshFromScene(FbxScene* Scene, const TMap<int64, FMaterialInfo>& MaterialMap, const TArray<FMaterialInfo>& MaterialInfos, const FString& Path);
+
+
+
     USkeletalMesh* LoadFbxSkeletalMesh(const FString& PathFileName);
 
     // Skeleton이 없는 FBX를 StaticMesh로 처리
     FStaticMesh* LoadFbxStaticMeshAsset(const FString& PathFileName);
     UStaticMesh* LoadFbxStaticMesh(const FString& PathFileName);
 private:
+    bool BuildStaticMeshFromFbx(const FString& NormalizedPathStr, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos);
     // Helper functions for FBX parsing
     UBone* ProcessSkeletonNode(FbxNode* InNode, UBone* InParent = nullptr);
     void ProcessMeshNode(FbxNode* InNode, FSkeletalMesh* OutSkeletalMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
