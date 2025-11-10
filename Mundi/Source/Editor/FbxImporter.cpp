@@ -127,7 +127,7 @@ FTransform FFbxImporter::ConvertFbxTransform(const FbxAMatrix& InMatrix)
     FbxVector4 Translation = InMatrix.GetT();
     Result.Translation = FVector(static_cast<float>(Translation[0]),
                                   static_cast<float>(-Translation[1]),
-                                  static_cast<float>(Translation[2]));
+                                  static_cast<float>(Translation[2])) * FBXUnitScale;
 
     FbxQuaternion Rotation = InMatrix.GetQ();
     Result.Rotation = FQuat(static_cast<float>(Rotation[0]),
@@ -222,7 +222,7 @@ void FFbxImporter::ExtractMeshData(FbxMesh* InMesh, FSkeletalMesh* OutSkeletalMe
                 FNormalVertex Vertex;
 
                 FbxVector4 Pos = ControlPoints[ControlPointIdx];
-                Vertex.pos = FVector(static_cast<float>(Pos[0]), static_cast<float>(-Pos[1]), static_cast<float>(Pos[2]));
+                Vertex.pos = FVector(static_cast<float>(Pos[0]), static_cast<float>(-Pos[1]), static_cast<float>(Pos[2]))* FBXUnitScale;
 
                 FbxVector4 Normal;
                 if (InMesh->GetPolygonVertexNormal(PolyIdx, LocalVertIdx, Normal))
@@ -553,7 +553,7 @@ void FFbxImporter::ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStat
                 FNormalVertex Vertex;
 
                 FbxVector4 Pos = ControlPoints[ControlPointIdx];
-                Vertex.pos = FVector(static_cast<float>(Pos[0]), static_cast<float>(-Pos[1]), static_cast<float>(Pos[2]));
+                Vertex.pos = FVector(static_cast<float>(Pos[0]), static_cast<float>(-Pos[1]), static_cast<float>(Pos[2])) * FBXUnitScale;
 
                 FbxVector4 Normal;
                 if (InMesh->GetPolygonVertexNormal(PolyIdx, LocalVertIdx, Normal))

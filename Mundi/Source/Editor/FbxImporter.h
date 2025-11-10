@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <fbxsdk.h>
 #include "UEContainer.h"
@@ -8,6 +8,8 @@ class UBone;
 struct FSkeletalMesh;
 struct FStaticMesh;
 struct FFlesh;
+
+constexpr float FBXUnitScale = 0.01f;
 
 class FFbxImporter
 {
