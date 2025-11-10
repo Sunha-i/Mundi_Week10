@@ -84,21 +84,10 @@ public:
 	~UUIWindow() override;
 
 	virtual void Initialize();
+	virtual void Cleanup() {}
 
-	
-
-
-	virtual void Cleanup()
-	{
-	}
-
-	virtual void OnFocusGained()
-	{
-	}
-
-	virtual void OnFocusLost()
-	{
-	}
+	virtual void OnFocusGained() {}
+	virtual void OnFocusLost() {}
 
 	virtual bool OnWindowClose() { return true; }
 	virtual bool IsSingleton() { return false; }
@@ -112,6 +101,7 @@ public:
 	int GetPriority() const { return Config.Priority; }
 	float GetLastFocusTime() const { return LastFocusTime; }
 	bool IsFocused() const { return bIsFocused; }
+	bool IsOpened() const { return bIsWindowOpen; }
 	const TArray<UWidget*>& GetWidgets() const { return Widgets; }
 	void SetIsResized(bool IsResized) { bIsResized = IsResized; }
 
@@ -156,7 +146,7 @@ private:
 	float LastFocusTime = 0.0f;
 
 	// ImGui 내부 상태
-	bool bIsWindowOpen = false;
+	bool bIsWindowOpen = true;
 	ImVec2 LastWindowSize;
 	ImVec2 LastWindowPosition;
 

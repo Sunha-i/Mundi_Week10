@@ -161,14 +161,33 @@ void UUIManager::Render()
 	// SortUIWindowsByPriority();
 
 	// 모든 UI 윈도우 렌더링
-	for (auto* Window : UIWindows)
+	for (int i = 0; i < UIWindows.size(); ++i)
 	{
+		UUIWindow* Window = UIWindows[i];
 		if (Window)
 		{
-			Window->RenderWindow();
+		    Window->RenderWindow();
+		
+		    // 방금 렌더링된 창이 닫혔는지 확인
+		    if (!Window->IsOpened())
+		    {
+		        // UnregisterUIWindow는 내부적으로 erase를 호출하므로,
+		        // Unregister만 호출하거나 직접 제거 로직을 작성
+		        // 여기서는 직접 제거하는 방식을 사용
+				if (FocusedWindow == Window)
+				{
+					FocusedWindow = nullptr;
+				}
+		
+		        Window->Cleanup();
+		        delete Window;
+		        UIWindows.erase(UIWindows.begin() + i);
+		        --i; // 배열에서 요소가 제거되었으므로 인덱스를 조정
+		    }
 		}
 	}
 }
+
 void UUIManager::EndFrame() 
 {
 	// ImGui 프레임 종료

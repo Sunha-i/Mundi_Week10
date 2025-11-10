@@ -140,9 +140,7 @@ void UUIWindow::RenderWindow()
 	// 크기 제한 설정
 	//ImGui::SetNextWindowSizeConstraints(Config.MinSize, Config.MaxSize);
 
-	bool bIsOpen = bIsWindowOpen;
-
-	if (ImGui::Begin(Config.WindowTitle.c_str(), &bIsOpen, Config.WindowFlags))
+	if (ImGui::Begin(Config.WindowTitle.c_str(), &bIsWindowOpen, Config.WindowFlags))
 	{
 		// 초기화: 처음 한 번만 비율 계산
 		if (!bIsRatioInitialized && !bIsResized)
@@ -180,21 +178,6 @@ void UUIWindow::RenderWindow()
 	}
 
 	ImGui::End();
-
-	// 윈도우가 닫혔는지 확인
-	if (!bIsWindowOpen && bIsWindowOpen)
-	{
-		if (OnWindowClose())
-		{
-			bIsWindowOpen = false;
-			SetWindowState(EUIWindowState::Hidden);
-		}
-		else
-		{
-			// 닫기 취소
-			bIsWindowOpen = true;
-		}
-	}
 }
 
 void UUIWindow::RenderWidget() const
