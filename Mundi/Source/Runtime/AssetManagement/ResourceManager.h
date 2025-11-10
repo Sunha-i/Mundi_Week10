@@ -196,7 +196,7 @@ inline T* UResourceManager::Load(const FString& InFilePath, Args && ...InArgs)
 
 		return static_cast<T*>((*iter).second);
 	}
-	else//없으면 해당 리소스의 Load실행
+	else //없으면 해당 리소스의 Load실행
 	{
 		T* Resource = NewObject<T>();
 		Resource->Load(NormalizedPath, Device, std::forward<Args>(InArgs)...);

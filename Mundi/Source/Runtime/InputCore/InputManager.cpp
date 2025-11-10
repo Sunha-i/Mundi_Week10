@@ -30,12 +30,8 @@ UInputManager::~UInputManager()
 
 UInputManager& UInputManager::GetInstance()
 {
-    static UInputManager* Instance = nullptr;
-    if (Instance == nullptr)
-    {
-        Instance = NewObject<UInputManager>();
-    }
-    return *Instance;
+    static UInputManager Instance;
+    return Instance;
 }
 
 void UInputManager::Initialize(HWND hWindow)
