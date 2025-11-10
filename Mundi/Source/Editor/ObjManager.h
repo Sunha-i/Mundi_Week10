@@ -62,4 +62,9 @@ public:
 	static void Clear();
 	static FStaticMesh* LoadObjStaticMeshAsset(const FString& PathFileName);
 	static UStaticMesh* LoadObjStaticMesh(const FString& PathFileName);
+
+	// Getter/Setter for external access (e.g., FbxManager)
+	static TMap<FString, FStaticMesh*>& GetObjStaticMeshMap() { return ObjStaticMeshMap; }
+	static void AddToCache(const FString& PathFileName, FStaticMesh* Mesh);
+	static FStaticMesh* GetFromCache(const FString& PathFileName);
 };

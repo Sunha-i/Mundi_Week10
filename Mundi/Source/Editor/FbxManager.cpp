@@ -4,6 +4,10 @@
 #include "Bone.h"
 #include "Keyboard.h"
 #include "SkeletalMesh.h"
+#include "ObjManager.h"
+#include "StaticMesh.h"
+#include "D3D11RHI.h"
+#include "Enums.h"
 
 #include "ObjectIterator.h"
 
@@ -466,21 +470,52 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
     {
         NewSkeletalMesh->Skeleton = NewObject<USkeleton>();
         NewSkeletalMesh->Skeleton->SetRoot(RootBone);
+
+        // Mesh 데이터 추출 (모든 Mesh 노드 찾기)
+        ProcessMeshNode(RootNode, NewSkeletalMesh, MaterialIDToInfoMap);
+
+        // 맵에 저장
+        FbxSkeletalMeshMap.Add(NormalizedPathStr, NewSkeletalMesh);
+
+        Scene->Destroy();
+        return NewSkeletalMesh;
     }
     else
     {
-        // Skeleton이 없는 경우 경고 (Static Mesh로 처리될 수 있음)
-        UE_LOG("[Warning] No skeleton found in FBX file: %s", NormalizedPathStr.c_str());
+        // Skeleton이 없는 경우 → StaticMesh로 처리하고 ObjManager 캐시에 저장
+        UE_LOG("[FBX] No skeleton found in file: %s - converting to StaticMesh", NormalizedPathStr.c_str());
+
+        // FSkeletalMesh 대신 FStaticMesh 생성
+        FStaticMesh* NewStaticMesh = new FStaticMesh;
+        NewStaticMesh->PathFileName = NormalizedPathStr;
+
+        // 이미 로드된 Scene과 MaterialIDToInfoMap 재사용
+        ProcessMeshNodeAsStatic(RootNode, NewStaticMesh, MaterialIDToInfoMap);
+
+        UE_LOG("[FBX StaticMesh] Vertices: %zu, Indices: %zu, Groups: %zu",
+               NewStaticMesh->Vertices.size(),
+               NewStaticMesh->Indices.size(),
+               NewStaticMesh->GroupInfos.size());
+
+        // ObjManager 캐시에 등록
+        FObjManager::AddToCache(NormalizedPathStr, NewStaticMesh);
+
+        // UStaticMesh 생성 및 ResourceManager에 등록
+        UStaticMesh* UStaticMeshObj = NewObject<UStaticMesh>();
+        UStaticMeshObj->SetFilePath(NormalizedPathStr);
+        UStaticMeshObj->Load(NormalizedPathStr, GEngine.GetRHIDevice()->GetDevice());
+        UResourceManager::GetInstance().Add<UStaticMesh>(NormalizedPathStr, UStaticMeshObj);
+
+        // FSkeletalMesh 삭제
+        delete NewSkeletalMesh;
+
+        Scene->Destroy();
+
+        UE_LOG("[FBX] Converted to StaticMesh and registered as UStaticMesh: %s", NormalizedPathStr.c_str());
+
+        // SkeletalMesh를 요청했지만 Skeleton이 없으므로 nullptr 반환
+        return nullptr;
     }
-
-    // Mesh 데이터 추출 (모든 Mesh 노드 찾기)
-    ProcessMeshNode(RootNode, NewSkeletalMesh, MaterialIDToInfoMap);
-
-    // 맵에 저장
-    FbxSkeletalMeshMap.Add(NormalizedPathStr, NewSkeletalMesh);
-
-    Scene->Destroy();
-    return NewSkeletalMesh;
 }
 
 USkeletalMesh* FFbxManager::LoadFbxSkeletalMesh(const FString& PathFileName)
@@ -924,4 +959,350 @@ FTransform FFbxManager::ConvertFbxTransform(const FbxAMatrix& InMatrix)
                              static_cast<float>(Scale[2]));
 
     return Result;
+}
+
+// Skeleton이 없는 FBX를 StaticMesh로 로드하고 ObjManager 캐시에 저장
+FStaticMesh* FFbxManager::LoadFbxStaticMeshAsset(const FString& PathFileName)
+{
+    // ObjManager 캐시 확인 (이미 캐시되어 있으면 재사용)
+    FStaticMesh* CachedMesh = FObjManager::GetFromCache(PathFileName);
+    if (CachedMesh)
+    {
+        UE_LOG("[FBX] StaticMesh already cached: %s", PathFileName.c_str());
+        return CachedMesh;
+    }
+
+    FString NormalizedPathStr = NormalizePath(PathFileName);
+
+    // FBX Importer 생성
+    FbxImporter* LocalImporter = FbxImporter::Create(SdkManager, "");
+    if (!LocalImporter->Initialize(NormalizedPathStr.c_str(), -1, SdkManager->GetIOSettings()))
+    {
+        UE_LOG("Failed to initialize FBX Importer for StaticMesh: %s", NormalizedPathStr.c_str());
+        LocalImporter->Destroy();
+        return nullptr;
+    }
+
+    // Scene 생성 및 Import
+    FbxScene* Scene = FbxScene::Create(SdkManager, "StaticMeshScene");
+    if (!LocalImporter->Import(Scene))
+    {
+        UE_LOG("Failed to import FBX scene for StaticMesh: %s", NormalizedPathStr.c_str());
+        LocalImporter->Destroy();
+        Scene->Destroy();
+        return nullptr;
+    }
+    LocalImporter->Destroy();
+
+    // FStaticMesh 생성
+    FStaticMesh* NewStaticMesh = new FStaticMesh;
+    NewStaticMesh->PathFileName = NormalizedPathStr;
+
+    // Material 정보 수집 (SkeletalMesh와 동일한 방식)
+    TMap<int64, FMaterialInfo> MaterialIDToInfoMap;
+    int MaterialCount = Scene->GetMaterialCount();
+    std::filesystem::path FbxDir = std::filesystem::path(NormalizedPathStr).parent_path();
+
+    auto ExtractTexturePath = [&FbxDir](FbxProperty& Prop) -> FString
+    {
+        FString TexturePath = "";
+        int FileTextureCount = Prop.GetSrcObjectCount<FbxFileTexture>();
+        if (FileTextureCount > 0)
+        {
+            FbxFileTexture* FileTexture = Prop.GetSrcObject<FbxFileTexture>(0);
+            if (FileTexture)
+            {
+                const char* FileName = FileTexture->GetFileName();
+                if (FileName && strlen(FileName) > 0)
+                {
+                    TexturePath = FileName;
+                    std::filesystem::path TexPath(TexturePath);
+                    if (!std::filesystem::exists(TexPath))
+                    {
+                        std::filesystem::path RelativePath = FbxDir / TexPath.filename();
+                        if (std::filesystem::exists(RelativePath))
+                        {
+                            TexturePath = RelativePath.string();
+                        }
+                    }
+                    TexturePath = NormalizePath(TexturePath);
+                }
+            }
+        }
+        return TexturePath;
+    };
+
+    for (int i = 0; i < MaterialCount; i++)
+    {
+        FbxSurfaceMaterial* Material = Scene->GetMaterial(i);
+        if (!Material)
+            continue;
+
+        FMaterialInfo MatInfo;
+        MatInfo.MaterialName = Material->GetName();
+        int64 MaterialID = Material->GetUniqueID();
+
+        // Diffuse
+        FbxProperty DiffuseProp = Material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+        if (DiffuseProp.IsValid())
+        {
+            FbxDouble3 DiffuseColor = DiffuseProp.Get<FbxDouble3>();
+            MatInfo.DiffuseColor = FVector(static_cast<float>(DiffuseColor[0]),
+                                           static_cast<float>(DiffuseColor[1]),
+                                           static_cast<float>(DiffuseColor[2]));
+            MatInfo.DiffuseTextureFileName = ExtractTexturePath(DiffuseProp);
+        }
+
+        MaterialIDToInfoMap.Add(MaterialID, MatInfo);
+
+        // UMaterial 생성 및 등록
+        if (!UResourceManager::GetInstance().Get<UMaterial>(MatInfo.MaterialName))
+        {
+            UMaterial* NewMaterial = NewObject<UMaterial>();
+            NewMaterial->SetMaterialInfo(MatInfo);
+            UResourceManager::GetInstance().Add<UMaterial>(MatInfo.MaterialName, NewMaterial);
+        }
+    }
+
+    // Root 노드 가져오기
+    FbxNode* RootNode = Scene->GetRootNode();
+    if (RootNode)
+    {
+        ProcessMeshNodeAsStatic(RootNode, NewStaticMesh, MaterialIDToInfoMap);
+    }
+
+    Scene->Destroy();
+
+    // ObjManager 캐시에 등록
+    FObjManager::AddToCache(NormalizedPathStr, NewStaticMesh);
+
+    UE_LOG("[FBX] Converted to StaticMesh and cached: %s", NormalizedPathStr.c_str());
+
+    return NewStaticMesh;
+}
+
+UStaticMesh* FFbxManager::LoadFbxStaticMesh(const FString& PathFileName)
+{
+    // FObjManager를 통해 UStaticMesh 로드
+    return FObjManager::LoadObjStaticMesh(PathFileName);
+}
+
+void FFbxManager::ProcessMeshNodeAsStatic(FbxNode* InNode, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
+{
+    if (!InNode || !OutStaticMesh)
+        return;
+
+    // 현재 노드가 Mesh인지 확인
+    FbxNodeAttribute* Attr = InNode->GetNodeAttribute();
+    if (Attr && Attr->GetAttributeType() == FbxNodeAttribute::eMesh)
+    {
+        FbxMesh* Mesh = InNode->GetMesh();
+        if (Mesh)
+        {
+            ExtractMeshDataAsStatic(Mesh, OutStaticMesh, MaterialIDToInfoMap);
+        }
+    }
+
+    // 자식 노드 재귀 처리
+    for (int i = 0; i < InNode->GetChildCount(); i++)
+    {
+        ProcessMeshNodeAsStatic(InNode->GetChild(i), OutStaticMesh, MaterialIDToInfoMap);
+    }
+}
+
+void FFbxManager::ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
+{
+    if (!InMesh || !OutStaticMesh)
+        return;
+
+    uint32 BaseVertexOffset = static_cast<uint32>(OutStaticMesh->Vertices.size());
+    uint32 BaseIndexOffset = static_cast<uint32>(OutStaticMesh->Indices.size());
+
+    int VertexCount = InMesh->GetControlPointsCount();
+    FbxVector4* ControlPoints = InMesh->GetControlPoints();
+
+    TArray<FNormalVertex> Vertices;
+    TArray<uint32> Indices;
+
+    int PolygonCount = InMesh->GetPolygonCount();
+    TMap<int, TArray<uint32>> PolyIdxToVertexIndices;
+
+    for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
+    {
+        int PolySize = InMesh->GetPolygonSize(PolyIdx);
+        if (PolySize < 3)
+            continue;
+
+        int NumTriangles = PolySize - 2;
+
+        for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
+        {
+            TArray<uint32> TriangleIndices;
+
+            // Fan Triangulation with Y-axis flip for LH coordinate system
+            int V0 = 0;
+            int V1 = TriIdx + 2;
+            int V2 = TriIdx + 1;
+
+            for (int LocalVertIdx : {V0, V1, V2})
+            {
+                int ControlPointIdx = InMesh->GetPolygonVertex(PolyIdx, LocalVertIdx);
+
+                FNormalVertex Vertex;
+
+                // Position - Z-Up RH to Z-Up LH: Y축 반전
+                FbxVector4 Pos = ControlPoints[ControlPointIdx];
+                Vertex.pos = FVector(static_cast<float>(Pos[0]),
+                                     static_cast<float>(-Pos[1]),  // Y축 반전
+                                     static_cast<float>(Pos[2]));
+
+                // Normal - Z-Up RH to Z-Up LH: Y축 반전
+                FbxVector4 Normal;
+                if (InMesh->GetPolygonVertexNormal(PolyIdx, LocalVertIdx, Normal))
+                {
+                    Vertex.normal = FVector(static_cast<float>(Normal[0]),
+                                            static_cast<float>(-Normal[1]),  // Y축 반전
+                                            static_cast<float>(Normal[2]));
+                }
+
+                // UV
+                FbxStringList UVSetNames;
+                InMesh->GetUVSetNames(UVSetNames);
+                if (UVSetNames.GetCount() > 0)
+                {
+                    FbxVector2 UV;
+                    bool bUnmapped;
+                    if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
+                    {
+                        Vertex.tex = FVector2D(static_cast<float>(UV[0]),
+                                               1.0f - static_cast<float>(UV[1]));
+                    }
+                }
+
+                uint32 VertexIndex = static_cast<uint32>(Vertices.size());
+                Vertices.Add(Vertex);
+                TriangleIndices.Add(VertexIndex);
+            }
+
+            int StorageKey = PolyIdx * 100 + TriIdx;
+            PolyIdxToVertexIndices.Add(StorageKey, TriangleIndices);
+        }
+    }
+
+    // Material별로 SubMesh 분리
+    FbxLayerElementMaterial* MaterialElement = InMesh->GetElementMaterial();
+    TMap<int, TArray<int>> MaterialToTriangles;
+
+    if (MaterialElement)
+    {
+        for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
+        {
+            int PolySize = InMesh->GetPolygonSize(PolyIdx);
+            if (PolySize < 3)
+                continue;
+
+            int MaterialIndex = 0;
+            if (MaterialElement->GetMappingMode() == FbxLayerElement::eByPolygon)
+            {
+                if (MaterialElement->GetReferenceMode() == FbxLayerElement::eIndexToDirect)
+                {
+                    MaterialIndex = MaterialElement->GetIndexArray().GetAt(PolyIdx);
+                }
+            }
+
+            if (!MaterialToTriangles.Contains(MaterialIndex))
+            {
+                MaterialToTriangles.Add(MaterialIndex, TArray<int>());
+            }
+
+            int NumTriangles = PolySize - 2;
+            for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
+            {
+                int StorageKey = PolyIdx * 100 + TriIdx;
+                MaterialToTriangles[MaterialIndex].Add(StorageKey);
+            }
+        }
+    }
+    else
+    {
+        // Material이 없으면 하나로 처리
+        TArray<int> AllTriangles;
+        for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
+        {
+            int PolySize = InMesh->GetPolygonSize(PolyIdx);
+            if (PolySize < 3)
+                continue;
+
+            int NumTriangles = PolySize - 2;
+            for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
+            {
+                int StorageKey = PolyIdx * 100 + TriIdx;
+                AllTriangles.Add(StorageKey);
+            }
+        }
+        MaterialToTriangles.Add(0, AllTriangles);
+    }
+
+    // Material별로 Indices 재구성 + GroupInfo 생성
+    TArray<uint32> ReorderedIndices;
+    uint32 CurrentStartIndex = BaseIndexOffset;
+
+    TArray<int> SortedMaterialIndices;
+    for (auto& Pair : MaterialToTriangles)
+    {
+        SortedMaterialIndices.Add(Pair.first);
+    }
+    SortedMaterialIndices.Sort();
+
+    for (int MaterialIndex : SortedMaterialIndices)
+    {
+        TArray<int>& TriangleIndices = MaterialToTriangles[MaterialIndex];
+
+        FGroupInfo NewGroup;
+        NewGroup.StartIndex = CurrentStartIndex;
+        NewGroup.IndexCount = 0;
+
+        for (int StorageKey : TriangleIndices)
+        {
+            TArray<uint32>* VertexIndicesPtr = PolyIdxToVertexIndices.Find(StorageKey);
+            if (!VertexIndicesPtr || VertexIndicesPtr->Num() != 3)
+                continue;
+
+            const TArray<uint32>& VertexIndices = *VertexIndicesPtr;
+            ReorderedIndices.Add(VertexIndices[0] + BaseVertexOffset);
+            ReorderedIndices.Add(VertexIndices[1] + BaseVertexOffset);
+            ReorderedIndices.Add(VertexIndices[2] + BaseVertexOffset);
+            NewGroup.IndexCount += 3;
+        }
+
+        // Material 이름 설정
+        if (MaterialElement && MaterialIndex < InMesh->GetNode()->GetMaterialCount())
+        {
+            FbxSurfaceMaterial* Material = InMesh->GetNode()->GetMaterial(MaterialIndex);
+            if (Material)
+            {
+                int64 MaterialID = Material->GetUniqueID();
+                if (const FMaterialInfo* FoundMatInfo = MaterialIDToInfoMap.Find(MaterialID))
+                {
+                    NewGroup.InitialMaterialName = FoundMatInfo->MaterialName;
+                }
+                else
+                {
+                    NewGroup.InitialMaterialName = Material->GetName();
+                }
+            }
+        }
+        else
+        {
+            NewGroup.InitialMaterialName = "DefaultMaterial";
+        }
+
+        OutStaticMesh->GroupInfos.Add(NewGroup);
+        CurrentStartIndex += NewGroup.IndexCount;
+    }
+
+    // FStaticMesh에 데이터 추가
+    OutStaticMesh->Vertices.insert(OutStaticMesh->Vertices.end(), Vertices.begin(), Vertices.end());
+    OutStaticMesh->Indices.insert(OutStaticMesh->Indices.end(), ReorderedIndices.begin(), ReorderedIndices.end());
+    OutStaticMesh->bHasMaterial = OutStaticMesh->bHasMaterial || (InMesh->GetElementMaterialCount() > 0);
 }

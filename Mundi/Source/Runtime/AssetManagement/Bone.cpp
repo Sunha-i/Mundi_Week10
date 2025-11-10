@@ -97,6 +97,8 @@ const FVector& UBone::GetWorldScale() const
 
 const FTransform& UBone::GetWorldTransform() const
 {
+    if (!Parent)
+        return RelativeTransform;
     return RelativeTransform.GetWorldTransform(Parent->RelativeTransform);
 }
 
