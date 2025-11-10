@@ -192,7 +192,6 @@ void FFBXImporter::ProcessNode(FbxNode* Node)
 
 
 // LogSummary removed; use WriteDebugDump instead.
-
 bool FFBXImporter::WriteDebugDump(const std::string& FilePath) const
 {
     std::ofstream out(FilePath, std::ios::out | std::ios::trunc);
@@ -401,142 +400,108 @@ void FFBXImporter::ProcessSkin(FbxMesh* Mesh)
 //  FbxMesh 객체에서 정점(Position), 노멀(Normal), UV 정보를 추출한다.
 //  - 모든 폴리곤을 순회하며, 각 버텍스를 변환
 // ============================================================================
+// ============================================================================
+// FBX Mesh 처리 함수
+//  - 위치, 노멀, UV를 읽어와 내부 포맷으로 변환
+// ============================================================================
 void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
 {
-    if (!Mesh)
-        return;
+    if (!Mesh) return;
 
-    // 정점 데이터 (ControlPoint 기준으로 스킨 정점 채움)
+    // ------------------------------------------------------------------------
+    // 기본 정보 추출
+    // ------------------------------------------------------------------------
     const int ControlPointCount = Mesh->GetControlPointsCount();
     const FbxVector4* ControlPoints = Mesh->GetControlPoints();
-    // 삼각형의 수 
     const int PolygonCount = Mesh->GetPolygonCount();
-    // 여러 UV 세트가 있을 수 있음. 가장 많이 매핑된 세트를 우선 선택.
-    const char* UvSetName = SelectBestUVSetName(Mesh);
-    if (!UvSetName)
-        UvSetName = GetFirstUVSetName(Mesh);
+
+    // 첫 번째 UVSet 이름만 사용 (일반적으로 map1 또는 UVMap)
+    const char* UvSetName = GetFirstUVSetName(Mesh);
     const bool bHasUV = (UvSetName != nullptr);
 
-    // 스킨 정점 배열을 ControlPoint 개수로 맞춰 둔다
+    // 스킨 정점 배열 크기 보장
     if ((int)SkinnedVertices.size() < ControlPointCount)
         SkinnedVertices.resize(ControlPointCount);
 
-    // 단위 변환은 LoadFBX 단계에서 FbxSystemUnit::m 로 이미 처리함.
-    // 여기서는 추가 스케일을 적용하지 않는다. (UV/노멀/포지션 모두 그대로 사용)
-    const float unitToMeters = 1.0f;
-
-    // 모든 폴리곤(삼각형)을 순회하며, 각 코너 단위로 속성 기록 + 코너 인덱스 기반 삼각형 생성
+    // ------------------------------------------------------------------------
+    // 폴리곤 순회 (삼각형 기준)
+    // ------------------------------------------------------------------------
     for (int PolyIndex = 0; PolyIndex < PolygonCount; ++PolyIndex)
     {
-        // 삼각형이면 PolySize 값은 3이다. 
         const int PolySize = Mesh->GetPolygonSize(PolyIndex);
-        int baseCorner = (int)CornerControlPointIndices.size();
+        const int baseCorner = (int)CornerControlPointIndices.size();
+
         for (int Corner = 0; Corner < PolySize; ++Corner)
         {
-            // 폴리곤 면이 참조하는 실제 정점 인덱스를 가져오는 핵심 코드
+            // ----- ControlPoint (정점 좌표) -----
             const int ControlPointIndex = Mesh->GetPolygonVertex(PolyIndex, Corner);
             if (ControlPointIndex < 0 || ControlPointIndex >= ControlPointCount)
-            {
                 continue;
-            }
-            // Position (컨트롤 포인트 위치는 cp에 보관)
-            const FbxVector4& P = ControlPoints[ControlPointIndex];
-            // Convert to engine space: match OBJ pipeline (invert Y)
-            SkinnedVertices[ControlPointIndex].pos = FVector(
-                (float)P[0],
-                (float)P[1],
-                (float)P[2]);
 
-            // Corner Normal
-            FVector NormalOut;
+            const FbxVector4& P = ControlPoints[ControlPointIndex];
+            SkinnedVertices[ControlPointIndex].pos = FVector((float)P[0], (float)P[1], (float)P[2]);
+
+            // ----- Normal -----
+            FVector NormalOut(0, 0, 1);
             {
                 FbxVector4 N(0, 0, 1, 0);
                 if (Mesh->GetPolygonVertexNormal(PolyIndex, Corner, N))
                 {
-                    const double len = N.Length();
-                    if (len > 1e-6) { N[0] /= len; N[1] /= len; N[2] /= len; }
-                    NormalOut = FVector((float)N[0], (float)(N[1]), (float)N[2]);
-                }
-                else
-                {
-                    NormalOut = FVector(0, 0, 1);
+                    N.Normalize();
+                    NormalOut = FVector((float)N[0], (float)N[1], (float)N[2]);
                 }
             }
 
-            // Corner UV (helper-first; robust fallbacks)
+            // ----- UV -----
             FVector2D UVOut(0.0f, 0.0f);
             if (bHasUV)
             {
-                // 1) Prefer SDK helper per polygon-vertex
                 FbxVector2 UV(0.0, 0.0);
                 bool bUnmapped = false;
+
+                // 1️⃣ FBX SDK 기본 헬퍼 (가장 안전함)
                 if (Mesh->GetPolygonVertexUV(PolyIndex, Corner, UvSetName, UV, bUnmapped) && !bUnmapped)
                 {
                     UVOut = FVector2D((float)UV[0], 1.0f - (float)UV[1]);
                 }
-                else
+                // 2️⃣ 폴백: 직접 UV 배열 접근
+                else if (const FbxGeometryElementUV* UvElem = Mesh->GetElementUV(UvSetName))
                 {
-                    // 2) Fallbacks by mapping mode
-                    if (const FbxGeometryElementUV* UvElem = Mesh->GetElementUV(UvSetName))
+                    const auto mapMode = UvElem->GetMappingMode();
+                    const auto refMode = UvElem->GetReferenceMode();
+
+                    if (mapMode == FbxGeometryElement::eByControlPoint)
                     {
-                        const auto mapMode = UvElem->GetMappingMode();
-                        const auto refMode = UvElem->GetReferenceMode();
+                        int cp = ControlPointIndex;
+                        int idx = (refMode == FbxGeometryElement::eIndexToDirect)
+                            ? UvElem->GetIndexArray().GetAt(cp)
+                            : cp;
 
-                        if (mapMode == FbxGeometryElement::eByControlPoint)
+                        if (idx >= 0 && idx < UvElem->GetDirectArray().GetCount())
                         {
-                            int cp = ControlPointIndex;
-                            FbxVector2 UvValue(0.0, 0.0);
-                            if (refMode == FbxGeometryElement::eDirect)
-                                UvValue = UvElem->GetDirectArray().GetAt(cp);
-                            else if (refMode == FbxGeometryElement::eIndexToDirect)
-                            {
-                                int idx = UvElem->GetIndexArray().GetAt(cp);
-                                UvValue = UvElem->GetDirectArray().GetAt(idx);
-                            }
-                            UVOut = FVector2D((float)UvValue[0], 1.0f - (float)UvValue[1]);
+                            FbxVector2 uv = UvElem->GetDirectArray().GetAt(idx);
+                            UVOut = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
                         }
-                        else if (mapMode == FbxGeometryElement::eByPolygonVertex)
+                    }
+                    else if (mapMode == FbxGeometryElement::eByPolygonVertex)
+                    {
+                        int vertexId = Mesh->GetTextureUVIndex(PolyIndex, Corner);
+                        if (vertexId >= 0 && vertexId < UvElem->GetDirectArray().GetCount())
                         {
-                            // polygon-vertex 기반 인덱스: 전체 코너 스트림에서의 인덱스
-                            const int polyVertBase = Mesh->GetPolygonVertexIndex(PolyIndex);
-                            const int polyVertIndex = polyVertBase + Corner;
-
-                            FbxVector2 UvValue(0.0, 0.0);
-                            if (refMode == FbxGeometryElement::eDirect)
-                            {
-                                if (polyVertIndex >= 0 && polyVertIndex < UvElem->GetDirectArray().GetCount())
-                                    UvValue = UvElem->GetDirectArray().GetAt(polyVertIndex);
-                            }
-                            else if (refMode == FbxGeometryElement::eIndexToDirect)
-                            {
-                                if (polyVertIndex >= 0 && polyVertIndex < UvElem->GetIndexArray().GetCount())
-                                {
-                                    int uvIdx = UvElem->GetIndexArray().GetAt(polyVertIndex);
-                                    if (uvIdx >= 0 && uvIdx < UvElem->GetDirectArray().GetCount())
-                                        UvValue = UvElem->GetDirectArray().GetAt(uvIdx);
-                                }
-                            }
-                            UVOut = FVector2D((float)UvValue[0], 1.0f - (float)UvValue[1]);
+                            FbxVector2 uv = UvElem->GetDirectArray().GetAt(vertexId);
+                            UVOut = FVector2D((float)uv[0], 1.0f - (float)uv[1]);
                         }
                     }
                 }
             }
 
-            // Store per-corner data
+            // ----- 데이터 저장 -----
             CornerControlPointIndices.push_back((uint32)ControlPointIndex);
             CornerNormals.push_back(NormalOut);
             CornerUVs.push_back(UVOut);
-
-            // For debug convenience: populate per-CP normal/uv if not set yet
-            // (raw dump prints SkinnedVertices; ensure it is not all zeros)
-            FSkinnedVertex& CPVert = SkinnedVertices[ControlPointIndex];
-            if (std::fabs(CPVert.normal.X) < 1e-6f && std::fabs(CPVert.normal.Y) < 1e-6f && std::fabs(CPVert.normal.Z) < 1e-6f)
-                CPVert.normal = NormalOut;
-            if (std::fabs(CPVert.uv.X) < 1e-6f && std::fabs(CPVert.uv.Y) < 1e-6f)
-                CPVert.uv = UVOut;
         }
 
-        // Triangulate() 보장. 코너 인덱스 기반으로 추가
+        // ----- 삼각형 인덱스 추가 -----
         if (PolySize == 3)
         {
             TriangleCornerIndices.push_back((uint32)baseCorner + 0);
@@ -545,50 +510,6 @@ void FFBXImporter::ProcessMesh(FbxMesh* Mesh)
         }
     }
 
-    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, Corners=%d",
-        PolygonCount, ControlPointCount, (int)CornerControlPointIndices.size());
+    UE_LOG("FFBXImporter - Mesh processed: Polygons=%d, ControlPoints=%d, Corners=%d, UVSet=%s",
+        PolygonCount, ControlPointCount, (int)CornerControlPointIndices.size(), UvSetName ? UvSetName : "None");
 }
-
-
-const char* FFBXImporter::SelectBestUVSetName(FbxMesh* Mesh)
-{
-    static std::string BestName;
-    BestName.clear();
-    if (!Mesh) return nullptr;
-
-    FbxStringList UvSetNames;
-    Mesh->GetUVSetNames(UvSetNames);
-    if (UvSetNames.GetCount() <= 0) return nullptr;
-
-    int bestMapped = -1;
-    const int polyCount = Mesh->GetPolygonCount();
-
-    for (int i = 0; i < UvSetNames.GetCount(); ++i)
-    {
-        const char* SetName = UvSetNames[i];
-        if (!SetName) continue;
-
-        int mapped = 0;
-        // Sample full mesh (cost OK) to be robust
-        for (int p = 0; p < polyCount; ++p)
-        {
-            const int corners = Mesh->GetPolygonSize(p);
-            for (int c = 0; c < corners; ++c)
-            {
-                FbxVector2 UV(0.0, 0.0);
-                bool bUnmapped = false;
-                if (Mesh->GetPolygonVertexUV(p, c, SetName, UV, bUnmapped) && !bUnmapped)
-                {
-                    ++mapped;
-                }
-            }
-        }
-        if (mapped > bestMapped)
-        {
-            bestMapped = mapped;
-            BestName = SetName;
-        }
-    }
-    return (bestMapped > 0) ? BestName.c_str() : nullptr;
-}
-
