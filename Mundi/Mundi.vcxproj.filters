@@ -548,6 +548,9 @@
     <ClCompile Include="Source\Runtime\AssetManagement\MeshBase.cpp">
       <Filter>Source\Runtime\AssetManagement</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Editor\FbxCache.cpp">
+      <Filter>Source\Editor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -1183,6 +1186,9 @@
     </ClInclude>
     <ClInclude Include="Source\Runtime\AssetManagement\MeshBase.h">
       <Filter>Source\Runtime\AssetManagement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\FbxCache.h">
+      <Filter>Source\Editor</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
