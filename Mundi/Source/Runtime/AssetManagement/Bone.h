@@ -27,10 +27,10 @@ public:
     void SetRelativeTransform(const FTransform& InRelativeTransform);
     
     // 자신의 월드 좌표 Getter Setter
-    const FVector& GetWorldLocation() const;
-    const FQuat& GetWorldRotation() const;
-    const FVector& GetWorldScale() const;
-    const FTransform& GetWorldTransform() const;
+    FVector GetWorldLocation() const;
+    FQuat GetWorldRotation() const;
+    FVector GetWorldScale() const;
+    FTransform GetWorldTransform() const;
 
     // Local BindPos Getter Setter
     const FVector& GetRelativeBindPoseLocation() const;
@@ -44,10 +44,10 @@ public:
     void SetRelativeBindPoseTransform(const FTransform& InBindPoseTransform);
 
     // World BindPos Getter
-    const FVector& GetWorldBindPoseLocation() const;
-    const FQuat& GetWorldBindPoseRotation() const;
-    const FVector& GetWorldBindPoseScale() const;
-    const FTransform& GetWorldBindPose() const;
+    FVector GetWorldBindPoseLocation() const;
+    FQuat GetWorldBindPoseRotation() const;
+    FVector GetWorldBindPoseScale() const;
+    FTransform GetWorldBindPose() const;
     
     // BindPos와 현 Transform의 차이를 반환
     FTransform GetBoneOffset();
