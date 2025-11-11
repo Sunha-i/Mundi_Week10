@@ -13,10 +13,7 @@ void FPreviewScene::DestroyWorldForPreviewScene()
         ObjectFactory::DeleteObject(WorldForPreview);
 }
 
-void FPreviewScene::SetCamera(
-        const FVector& CameraLocation,
-        const FVector& CameraRotation
-    )
+void FPreviewScene::SetCamera(ACameraActor* InCamera)
 {
     if (!WorldForPreview)
     {
@@ -24,12 +21,13 @@ void FPreviewScene::SetCamera(
         return;
     }
 
-    if (!Camera)
-        Camera = NewObject<ACameraActor>();
+    if (!InCamera)
+    {
+        UE_LOG("[FPreviewScene::SetCamera] Warning : InCamera is null.");
+        return;
+    }
 
-    Camera->SetActorLocation(CameraLocation);
-    Camera->SetRotationFromEulerAngles(CameraRotation);
-
+    Camera = InCamera;
     WorldForPreview->SetEditorCameraActor(Camera);
 }
 

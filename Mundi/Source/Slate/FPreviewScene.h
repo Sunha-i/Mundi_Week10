@@ -8,10 +8,7 @@ public:
     void CreateWorldForPreviewScene();
     void DestroyWorldForPreviewScene();
 
-    void SetCamera(
-        const FVector& CameraLocation,
-        const FVector& CameraRotation
-    );
+    void SetCamera(ACameraActor* InCamera);
     void SetActor(AActor* InActor);
     void SetDirectionalLight(const FVector& LightRotation);
 

@@ -77,6 +77,12 @@ public:
 	void Render();
 	void RenderSkelMeshPreviewer();
 
+	/** @brief Render()와 동일하지만 BackBuffer 대신 텍스처를 반환합니다 (Preview용).
+	 *  @param TargetWidth 렌더링할 텍스처의 가로 해상도
+	 *  @param TargetHeight 렌더링할 텍스처의 세로 해상도
+	 */
+	ID3D11Texture2D* RenderToTexture(uint32 TargetWidth, uint32 TargetHeight);
+
 private:
 	// Render Path
 	void RenderLitPath();

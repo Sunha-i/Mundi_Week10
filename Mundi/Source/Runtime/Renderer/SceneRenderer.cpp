@@ -1455,3 +1455,63 @@ void FSceneRenderer::CompositeToBackBuffer()
 	// 7. 모든 작업이 성공했으므로 Commit
 	SwapGuard.Commit();
 }
+
+//====================================================================================
+// RenderToTexture - Preview용 렌더링 (지정된 해상도의 텍스처에 렌더링하고 반환)
+//====================================================================================
+ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 TargetHeight)
+{
+	if (!IsValid()) return nullptr;
+
+	// 뷰(View) 준비: 행렬, 절두체 등 프레임에 필요한 기본 데이터 계산
+	PrepareView();
+	// 렌더링할 대상 수집 (Cull + Gather)
+	GatherVisibleProxies();
+
+	TIME_PROFILE(ShadowMapPass)
+	RenderShadowMaps();
+	TIME_PROFILE_END(ShadowMapPass)
+	
+	// ViewMode에 따라 렌더링 경로 결정
+	if (View->RenderSettings->GetViewMode() == EViewMode::VMI_Lit_Phong ||
+		View->RenderSettings->GetViewMode() == EViewMode::VMI_Lit_Gouraud ||
+		View->RenderSettings->GetViewMode() == EViewMode::VMI_Lit_Lambert)
+	{
+		GWorld->GetLightManager()->UpdateLightBuffer(RHIDevice);	//라이트 구조체 버퍼 업데이트, 바인딩
+		PerformTileLightCulling();	// 타일 기반 라이트 컬링 수행
+		RenderLitPath();
+		RenderPostProcessingPasses();	// 후처리 체인 실행
+		RenderTileCullingDebug();	// 타일 컬링 디버그 시각화 draw
+	}
+	else if (View->RenderSettings->GetViewMode() == EViewMode::VMI_Unlit)
+	{
+		RenderLitPath();	// Unlit 모드는 조명 없이 렌더링
+	}
+	else if (View->RenderSettings->GetViewMode() == EViewMode::VMI_WorldNormal)
+	{
+		RenderLitPath();	// World Normal 시각화 모드
+	}
+	else if (View->RenderSettings->GetViewMode() == EViewMode::VMI_Wireframe)
+	{
+		RenderWireframePath();
+	}
+	else if (View->RenderSettings->GetViewMode() == EViewMode::VMI_SceneDepth)
+	{
+		RenderSceneDepthPath();
+	}
+	
+	if (!World->bPie)
+	{
+		//그리드와 디버그용 Primitive는 Post Processing 적용하지 않음.
+		RenderEditorPrimitivesPass();	// 빌보드, 기타 화살표 출력 (상호작용, 피킹 O)
+		RenderDebugPass();	//  그리드, 선택한 물체의 경계 출력 (상호작용, 피킹 X)
+
+		// 오버레이(Overlay) Primitive 렌더링
+		RenderOverayEditorPrimitivesPass();	// 기즈모 출력
+	}
+
+	// FXAA 등 화면에서 최종 이미지 품질을 위해 적용되는 효과를 적용
+	ApplyScreenEffectsPass();
+
+	return RHIDevice->GetCurrentSourceTexture();
+}
