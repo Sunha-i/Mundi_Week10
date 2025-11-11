@@ -83,6 +83,8 @@ public:
     void CreateLevel();
 
     void SpawnDefaultActors();
+    void AddEditorActor(AActor* Actor);
+    void RemoveEditorActor(AActor* Actor);
 
     // Level ownership API
     void SetLevel(std::unique_ptr<ULevel> InLevel);

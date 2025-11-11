@@ -1238,13 +1238,51 @@ void FSceneRenderer::RenderDebugPass()
 {
 	RHIDevice->OMSetRenderTargets(ERTVMode::SceneColorTarget);
 
-	// 그리드 라인 수집
+	const bool bShowGrid = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Grid);
+	TArray<ULineComponent*> OverlayLines;
+
+	// 에디터 라인 수집 (그리드 및 기타)
 	for (ULineComponent* LineComponent : Proxies.EditorLines)
 	{
-		if (World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Grid))
+		if (!LineComponent)
+		{
+			continue;
+		}
+
+		if (LineComponent->IsAlwaysOnTop())
+		{
+			OverlayLines.Add(LineComponent);
+			continue;
+		}
+
+		const bool bRequiresGrid = LineComponent->RequiresGridShowFlag();
+		if (!bRequiresGrid || bShowGrid)
 		{
 			LineComponent->CollectLineBatches(OwnerRenderer);
 		}
+	}
+
+	OwnerRenderer->EndLineBatch(FMatrix::Identity(), true);
+
+	if (!OverlayLines.IsEmpty())
+	{
+		OwnerRenderer->BeginLineBatch();
+
+		for (ULineComponent* LineComponent : OverlayLines)
+		{
+			if (!LineComponent)
+			{
+				continue;
+			}
+
+			const bool bRequiresGrid = LineComponent->RequiresGridShowFlag();
+			if (!bRequiresGrid || bShowGrid)
+			{
+				LineComponent->CollectLineBatches(OwnerRenderer);
+			}
+		}
+
+		OwnerRenderer->EndLineBatch(FMatrix::Identity(), false);
 	}
 
 	// 선택된 액터의 디버그 볼륨 렌더링
@@ -1266,9 +1304,6 @@ void FSceneRenderer::RenderDebugPass()
 			BVH->DebugDraw(OwnerRenderer); // DebugDraw가 LineBatcher를 직접 받도록 수정 필요
 		}
 	}
-
-	// 수집된 라인을 출력하고 정리
-	OwnerRenderer->EndLineBatch(FMatrix::Identity());
 }
 
 void FSceneRenderer::RenderOverayEditorPrimitivesPass()

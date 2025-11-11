@@ -24,6 +24,10 @@ public:
     // Properties
     void SetLineVisible(bool bVisible) { bLinesVisible = bVisible; }
     bool IsLineVisible() const { return bLinesVisible; }
+    void SetRequiresGridShowFlag(bool bInRequiresGridFlag) { bRequiresGridShowFlag = bInRequiresGridFlag; }
+    bool RequiresGridShowFlag() const { return bRequiresGridShowFlag; }
+    void SetAlwaysOnTop(bool bInAlwaysOnTop) { bAlwaysOnTop = bInAlwaysOnTop; }
+    bool IsAlwaysOnTop() const { return bAlwaysOnTop; }
     
     const TArray<ULine*>& GetLines() const { return Lines; }
     int64 GetLineCount() const { return static_cast<int64>(Lines.size()); }
@@ -39,4 +43,6 @@ public:
 private:
     TArray<ULine*> Lines;
     bool bLinesVisible = true;
+    bool bRequiresGridShowFlag = true;
+    bool bAlwaysOnTop = false;
  };

@@ -252,7 +252,7 @@ void URenderer::AddLines(const TArray<FVector>& StartPoints, const TArray<FVecto
 	}
 }
 
-void URenderer::EndLineBatch(const FMatrix& ModelMatrix)
+void URenderer::EndLineBatch(const FMatrix& ModelMatrix, bool bEnableDepthTest)
 {
 	if (!bLineBatchActive || !LineBatchData || !DynamicLineMesh || LineBatchData->Vertices.empty())
 	{
@@ -296,8 +296,15 @@ void URenderer::EndLineBatch(const FMatrix& ModelMatrix)
 		RHIDevice->GetDeviceContext()->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
 		RHIDevice->GetDeviceContext()->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 		RHIDevice->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-		// Overlay 스텐실(=1) 영역은 그리지 않도록 스텐실 테스트 설정
-		RHIDevice->OMSetDepthStencilState_StencilRejectOverlay();
+		if (bEnableDepthTest)
+		{
+			// Overlay 스텐실(=1) 영역은 그리지 않도록 스텐실 테스트 설정
+			RHIDevice->OMSetDepthStencilState_StencilRejectOverlay();
+		}
+		else
+		{
+			RHIDevice->OMSetDepthStencilState(EComparisonFunc::Always);
+		}
 		RHIDevice->GetDeviceContext()->DrawIndexed(DynamicLineMesh->GetCurrentIndexCount(), 0, 0);
 		// 상태 복구
 		RHIDevice->GetDeviceContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

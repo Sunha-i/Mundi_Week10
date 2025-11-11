@@ -18,6 +18,7 @@
 #include "Frustum.h"
 #include "Occlusion.h"
 #include "Gizmo/GizmoActor.h"
+#include <algorithm>
 #include "Grid/GridActor.h"
 #include "StaticMeshComponent.h"
 #include "DirectionalLightActor.h"
@@ -430,6 +431,29 @@ void UWorld::CreateLevel()
 void UWorld::SpawnDefaultActors()
 {
 	SpawnActor<ADirectionalLightActor>();
+}
+
+void UWorld::AddEditorActor(AActor* Actor)
+{
+	if (!Actor)
+	{
+		return;
+	}
+
+	if (std::find(EditorActors.begin(), EditorActors.end(), Actor) == EditorActors.end())
+	{
+		EditorActors.push_back(Actor);
+	}
+}
+
+void UWorld::RemoveEditorActor(AActor* Actor)
+{
+	if (!Actor)
+	{
+		return;
+	}
+
+	EditorActors.Remove(Actor);
 }
 
 void UWorld::SetLevel(std::unique_ptr<ULevel> InLevel)

@@ -14,6 +14,12 @@
 #include "Skeleton.h"
 #include "Bone.h"
 #include "SkeletalMesh.h"
+#include "LineComponent.h"
+
+namespace
+{
+	const FVector4 OverlayBoneColor = FVector4(0.1f, 0.75f, 1.0f, 1.0f);
+}
 
 IMPLEMENT_CLASS(USkeletalMeshViewportWidget)
 
@@ -59,6 +65,17 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 
 USkeletalMeshViewportWidget::~USkeletalMeshViewportWidget()
 {
+	ClearSkeletonOverlay(true);
+	if (PreviewActor)
+	{
+		if (UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview())
+		{
+			PreviewWorld->RemoveEditorActor(PreviewActor);
+		}
+		PreviewActor->Destroy();
+		PreviewActor = nullptr;
+	}
+
 	ReleasePreviewRenderTarget();
 	WorldForPreviewManager.DestroyWorldForPreviewScene();
 
@@ -80,6 +97,14 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 		return;
 	}
 
+	if (PreviewActor)
+	{
+		PreviewWorld->RemoveEditorActor(PreviewActor);
+		ClearSkeletonOverlay(true);
+		PreviewActor->Destroy();
+		PreviewActor = nullptr;
+	}
+
 	// Actor 생성 및 Mesh 설정
 	ASkeletalMeshActor* SkeletalMeshActor = NewObject<ASkeletalMeshActor>();
 
@@ -94,6 +119,9 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	}
 
 	WorldForPreviewManager.SetActor(SkeletalMeshActor);
+	PreviewWorld->AddEditorActor(SkeletalMeshActor);
+	PreviewActor = SkeletalMeshActor;
+	MarkSkeletonOverlayDirty();
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -222,6 +250,27 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		ImGui::Separator();
 		ImGui::Text("Mesh: %s", TargetMeshName.ToString().c_str());
 		ImGui::Separator();
+
+		const bool bHasMeshLoaded = HasLoadedSkeletalMesh();
+		ImGui::BeginDisabled(!bHasMeshLoaded);
+		bool bOverlayToggle = bShowSkeletonOverlay;
+		if (ImGui::Checkbox("Skeleton Overlay", &bOverlayToggle))
+		{
+			ToggleSkeletonOverlay(bOverlayToggle);
+		}
+		ImGui::EndDisabled();
+
+		if (!bHasMeshLoaded)
+		{
+			ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Load a skeletal mesh to enable overlays.");
+		}
+
+		ImGui::Separator();
+
+		if (bShowSkeletonOverlay)
+		{
+			UpdateSkeletonOverlayIfNeeded();
+		}
 
 		// 디버그 정보 표시
 		// ImGui::Text("Debug Info:");
@@ -396,6 +445,7 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		{
 			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
 			SelectedBone->SetRelativeTransform(NewTransform);
+			MarkSkeletonOverlayDirty();
 		}
 
 		ImGui::Unindent();
@@ -437,4 +487,172 @@ void USkeletalMeshViewportWidget::ReleasePreviewRenderTarget()
 
 	PreviewTextureWidth = 0;
 	PreviewTextureHeight = 0;
+}
+
+bool USkeletalMeshViewportWidget::HasLoadedSkeletalMesh() const
+{
+	if (!PreviewActor)
+	{
+		return false;
+	}
+
+	USkeletalMeshComponent* MeshComp = PreviewActor->GetSkeletalMeshComponent();
+	if (!MeshComp)
+	{
+		return false;
+	}
+
+	USkeletalMesh* SkeletalMesh = MeshComp->GetSkeletalMesh();
+	if (!SkeletalMesh)
+	{
+		return false;
+	}
+
+	FSkeletalMesh* MeshAsset = SkeletalMesh->GetSkeletalMeshAsset();
+	return MeshAsset && MeshAsset->Skeleton && MeshAsset->Skeleton->GetRoot();
+}
+
+void USkeletalMeshViewportWidget::ToggleSkeletonOverlay(bool bEnable)
+{
+	if (bShowSkeletonOverlay == bEnable)
+	{
+		return;
+	}
+
+	bShowSkeletonOverlay = bEnable;
+	if (bShowSkeletonOverlay)
+	{
+		MarkSkeletonOverlayDirty();
+	}
+	else
+	{
+		ClearSkeletonOverlay(false);
+	}
+}
+
+void USkeletalMeshViewportWidget::UpdateSkeletonOverlayIfNeeded()
+{
+	if (!bShowSkeletonOverlay)
+	{
+		return;
+	}
+
+	ASkeletalMeshActor* SkeletalActor = GetPreviewActor();
+	if (!SkeletalActor)
+	{
+		return;
+	}
+
+	USkeletalMeshComponent* MeshComponent = SkeletalActor->GetSkeletalMeshComponent();
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	USkeletalMesh* SkeletalMesh = MeshComponent->GetSkeletalMesh();
+	FSkeletalMesh* MeshAsset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+	USkeleton* Skeleton = MeshAsset ? MeshAsset->Skeleton : nullptr;
+	if (!Skeleton || !Skeleton->GetRoot())
+	{
+		return;
+	}
+
+	EnsureSkeletonLineComponent(MeshComponent);
+	if (!SkeletonLineComponent)
+	{
+		return;
+	}
+
+	if (!bSkeletonLinesDirty && SkeletonLineComponent->GetLineCount() > 0)
+	{
+		SkeletonLineComponent->SetLineVisible(true);
+		return;
+	}
+
+	SkeletonLineComponent->ClearLines();
+
+	const FTransform ComponentInverse = MeshComponent->GetWorldTransform().Inverse();
+	BuildSkeletonLinesRecursive(Skeleton->GetRoot(), ComponentInverse);
+	SkeletonLineComponent->SetLineVisible(true);
+	bSkeletonLinesDirty = false;
+}
+
+void USkeletalMeshViewportWidget::EnsureSkeletonLineComponent(USkeletalMeshComponent* MeshComponent)
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	if (!SkeletonLineComponent)
+	{
+		SkeletonLineComponent = NewObject<ULineComponent>();
+		if (!SkeletonLineComponent)
+		{
+			return;
+		}
+
+		SkeletonLineComponent->SetupAttachment(MeshComponent);
+		SkeletonLineComponent->SetRequiresGridShowFlag(false);
+		SkeletonLineComponent->SetAlwaysOnTop(true);
+
+		if (ASkeletalMeshActor* SkeletalActor = GetPreviewActor())
+		{
+			SkeletalActor->AddOwnedComponent(SkeletonLineComponent);
+			if (UWorld* PreviewWorld = SkeletalActor->GetWorld())
+			{
+				SkeletonLineComponent->RegisterComponent(PreviewWorld);
+			}
+		}
+	}
+}
+
+void USkeletalMeshViewportWidget::BuildSkeletonLinesRecursive(UBone* Bone, const FTransform& ComponentWorldInverse)
+{
+	if (!Bone || !SkeletonLineComponent)
+	{
+		return;
+	}
+
+	const FVector ParentLocal = ComponentWorldInverse.TransformPosition(Bone->GetWorldLocation());
+
+	for (UBone* Child : Bone->GetChildren())
+	{
+		if (!Child)
+		{
+			continue;
+		}
+
+		const FVector ChildLocal = ComponentWorldInverse.TransformPosition(Child->GetWorldLocation());
+
+		SkeletonLineComponent->AddLine(ParentLocal, ChildLocal, OverlayBoneColor);
+		BuildSkeletonLinesRecursive(Child, ComponentWorldInverse);
+	}
+}
+
+void USkeletalMeshViewportWidget::ClearSkeletonOverlay(bool bReleaseComponent)
+{
+	if (SkeletonLineComponent)
+	{
+		SkeletonLineComponent->ClearLines();
+		SkeletonLineComponent->SetLineVisible(false);
+
+		if (bReleaseComponent)
+		{
+			SkeletonLineComponent->DestroyComponent();
+			SkeletonLineComponent = nullptr;
+		}
+	}
+
+	if (bReleaseComponent)
+	{
+		SkeletonLineComponent = nullptr;
+	}
+
+	bSkeletonLinesDirty = true;
+}
+
+void USkeletalMeshViewportWidget::MarkSkeletonOverlayDirty()
+{
+	bSkeletonLinesDirty = true;
 }
