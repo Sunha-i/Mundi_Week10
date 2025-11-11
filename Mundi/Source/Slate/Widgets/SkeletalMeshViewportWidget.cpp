@@ -330,7 +330,8 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float Height)
 {
-	ImGui::BeginChild("BoneInformation", ImVec2(Width, Height), true);
+	const float padding = ImGui::GetStyle().WindowPadding.x;
+	ImGui::BeginChild("BoneInformation", ImVec2(Width - padding * 2, Height), true);
 	{
 		ImGui::Text("Bone Information");
 		ImGui::Separator();
