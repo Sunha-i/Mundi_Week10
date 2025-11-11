@@ -20,6 +20,9 @@ public:
     virtual void Draw(FViewport* Viewport);
     virtual void Tick(float DeltaTime);
 
+    // Preview 렌더링 (텍스처 반환)
+    ID3D11Texture2D* DrawToTexture(FViewport* Viewport);
+
     // 입력 처리
     virtual void MouseMove(FViewport* Viewport, int32 X, int32 Y);
     virtual void MouseButtonDown(FViewport* Viewport, int32 X, int32 Y, int32 Button);
