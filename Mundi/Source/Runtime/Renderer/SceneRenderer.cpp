@@ -1513,5 +1513,80 @@ ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 Targ
 	// FXAA 등 화면에서 최종 이미지 품질을 위해 적용되는 효과를 적용
 	ApplyScreenEffectsPass();
 
-	return RHIDevice->GetCurrentSourceTexture();
+	// 마지막: CompositeToBackBuffer 대신 지정된 해상도의 RenderTarget에 Composite
+	ID3D11Texture2D* ResultTexture = nullptr;
+	ID3D11RenderTargetView* ResultRTV = nullptr;
+	ID3D11Texture2D* TempDepth = nullptr;
+	ID3D11DepthStencilView* TempDSV = nullptr;
+
+	HRESULT hr = RHIDevice->CreateRenderTargetWithDepth(
+		TargetWidth, TargetHeight,
+		&ResultTexture, &ResultRTV,
+		&TempDepth, &TempDSV);
+
+	if (FAILED(hr) || !ResultTexture)
+	{
+		UE_LOG("[RenderToTexture] Error: Failed to create result render target");
+		return nullptr;
+	}
+
+	// SwapGuard로 현재 SceneColor를 Source로 만들고, 작업 후 SRV 슬롯 0을 자동 해제
+	FSwapGuard SwapGuard(RHIDevice, 0, 1);
+
+	// ResultRTV를 Target으로 설정 (깊이 버퍼 없음)
+	RHIDevice->GetDeviceContext()->OMSetRenderTargets(1, &ResultRTV, nullptr);
+
+	// Viewport 설정
+	D3D11_VIEWPORT ResultViewport = {};
+	ResultViewport.TopLeftX = 0;
+	ResultViewport.TopLeftY = 0;
+	ResultViewport.Width = static_cast<float>(TargetWidth);
+	ResultViewport.Height = static_cast<float>(TargetHeight);
+	ResultViewport.MinDepth = 0.0f;
+	ResultViewport.MaxDepth = 1.0f;
+	RHIDevice->GetDeviceContext()->RSSetViewports(1, &ResultViewport);
+
+	// 텍스처 및 샘플러 설정
+	ID3D11ShaderResourceView* SourceSRV = RHIDevice->GetCurrentSourceSRV();
+	ID3D11SamplerState* SamplerState = RHIDevice->GetSamplerState(RHI_Sampler_Index::LinearClamp);
+	if (!SourceSRV || !SamplerState)
+	{
+		UE_LOG("[RenderToTexture] Error: Missing resources for composite");
+		ResultRTV->Release();
+		ResultTexture->Release();
+		TempDepth->Release();
+		TempDSV->Release();
+		return nullptr;
+	}
+
+	// 셰이더 리소스 바인딩
+	RHIDevice->GetDeviceContext()->PSSetShaderResources(0, 1, &SourceSRV);
+	RHIDevice->GetDeviceContext()->PSSetSamplers(0, 1, &SamplerState);
+
+	// 셰이더 준비
+	UShader* FullScreenTriangleVS = UResourceManager::GetInstance().Load<UShader>("Shaders/Utility/FullScreenTriangle_VS.hlsl");
+	UShader* BlitPS = UResourceManager::GetInstance().Load<UShader>("Shaders/Utility/Blit_PS.hlsl");
+	if (!FullScreenTriangleVS || !FullScreenTriangleVS->GetVertexShader() || !BlitPS || !BlitPS->GetPixelShader())
+	{
+		UE_LOG("[RenderToTexture] Error: Blit shader not found");
+		ResultRTV->Release();
+		ResultTexture->Release();
+		TempDepth->Release();
+		TempDSV->Release();
+		return nullptr;
+	}
+	RHIDevice->PrepareShader(FullScreenTriangleVS, BlitPS);
+
+	// 그리기
+	RHIDevice->DrawFullScreenQuad();
+
+	// 모든 작업이 성공했으므로 Commit
+	SwapGuard.Commit();
+
+	// Cleanup (Texture는 반환하므로 Release 안함)
+	ResultRTV->Release();
+	TempDepth->Release();
+	TempDSV->Release();
+
+	return ResultTexture;
 }
