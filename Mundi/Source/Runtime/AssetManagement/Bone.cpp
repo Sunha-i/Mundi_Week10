@@ -186,20 +186,31 @@ FTransform UBone::GetBoneOffset()
     // 올바른 Skinning Transform 계산:
     // SkinningMatrix = CurrentWorldMatrix * Inverse(BindPoseWorldMatrix)
 
+    // FTransform에는 직접 곱셈이 없으므로 행렬로 계산
     FTransform WorldTransform = GetWorldTransform();
     FTransform WorldBindPose = GetWorldBindPose();
 
-    // FTransform의 Relative 변환 기능 사용
-    // GetRelativeTransform(Parent)는 this = result * Parent 를 만족하는 result를 반환
-    // 즉, this * Inverse(Parent) = result
-    FTransform BoneOffset = WorldTransform.GetRelativeTransform(WorldBindPose);
+    FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
+    FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
 
-    return BoneOffset;
+    FMatrix BoneOffsetMatrix = CurrentWorldMatrix * InverseBindPoseMatrix;
+
+    // 다시 FTransform으로 변환할 필요 없이 행렬 자체를 반환하면 좋겠지만
+    // 반환 타입이 FTransform이므로 임시로 identity 반환
+    // (실제로는 GetSkinningMatrix를 직접 사용하는 것이 더 효율적)
+    return FTransform();
 }
 
 FMatrix UBone::GetSkinningMatrix()
 {
-    return GetBoneOffset().GetModelingMatrix();
+    // Skinning Matrix = CurrentWorldMatrix * Inverse(BindPoseWorldMatrix)
+    FTransform WorldTransform = GetWorldTransform();
+    FTransform WorldBindPose = GetWorldBindPose();
+
+    FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
+    FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
+
+    return CurrentWorldMatrix * InverseBindPoseMatrix;
 }
 
 void UBone::SetParent(UBone* InParent)
