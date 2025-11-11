@@ -47,7 +47,11 @@
 #include "PlatformTime.h"
 #include "PostProcessing/VignettePass.h"
 
-FSceneRenderer::FSceneRenderer(UWorld* InWorld, FSceneView* InView, URenderer* InOwnerRenderer)
+FSceneRenderer::FSceneRenderer(
+	UWorld* InWorld,
+	FSceneView* InView,
+	URenderer* InOwnerRenderer
+)
 	: World(InWorld)
 	, View(InView) // 전달받은 FSceneView 저장
 	, OwnerRenderer(InOwnerRenderer)

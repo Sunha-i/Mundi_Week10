@@ -75,6 +75,7 @@ public:
 
 	/** @brief 이 씬 렌더러의 모든 렌더링 파이프라인을 실행합니다. */
 	void Render();
+	void RenderSkelMeshPreviewer();
 
 private:
 	// Render Path

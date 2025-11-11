@@ -235,6 +235,10 @@ private:
 	ID3D11RenderTargetView* BackBufferRTV{};
 	ID3D11DepthStencilView* DepthStencilView{};
 
+	// For Skeletal Mesh Previewer
+	ID3D11RenderTargetView* SkelMeshPreviewerRTV{};
+	ID3D11DepthStencilView* SkelMeshPreviewerDSV{};
+
 	static const int NUM_SCENE_BUFFERS = 2;
 	// 씬 컬러 렌더링을 위한 핑퐁 버퍼 리소스
 	ID3D11Texture2D* SceneColorTextures[NUM_SCENE_BUFFERS];
@@ -247,6 +251,10 @@ private:
 
 	ID3D11Texture2D* DepthBuffer = nullptr;
 	ID3D11ShaderResourceView* DepthSRV = nullptr;
+
+	// For Skeletal Mesh Previewer
+	ID3D11Texture2D* SkelMeshPreviewerDepthBuffer = nullptr;
+	ID3D11ShaderResourceView* SkelMeshPreviewerDepthSRV = nullptr;
 
     // 버퍼 핸들
 	CONSTANT_BUFFER_LIST(DECLARE_CONSTANT_BUFFER)

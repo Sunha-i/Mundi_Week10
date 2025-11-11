@@ -408,7 +408,7 @@ void UUIManager::OpenSkeletalMeshViewer(USkeletalMesh* InMesh)
 	{
 		if (USkeletalMeshViewerWindow* ViewerWindow = Cast<USkeletalMeshViewerWindow>(ExistingWindow))
 		{
-			if (ViewerWindow->TargetMesh && ViewerWindow->TargetMesh->GetFilePath() == InMeshPath)
+			if (ViewerWindow->TargetMeshName == InMeshPath)
 			{
 				UE_LOG("SkeletalMeshViewer for '%s' is already open. Bringing to front.", InMesh->GetName().c_str());
 				ViewerWindow->SetWindowState(EUIWindowState::Visible);
@@ -423,7 +423,7 @@ void UUIManager::OpenSkeletalMeshViewer(USkeletalMesh* InMesh)
 	NewViewer->InitConfig.WindowTitle = "Skeletal Mesh Viewer";
 	NewViewer->InitConfig.DefaultSize = ImVec2(600, 800);
 	NewViewer->InitConfig.UpdateWindowFlags();
-	NewViewer->TargetMesh = InMesh;
+	NewViewer->TargetMeshName = InMesh->GetFilePath();
 
 	RegisterUIWindow(NewViewer);
 }
