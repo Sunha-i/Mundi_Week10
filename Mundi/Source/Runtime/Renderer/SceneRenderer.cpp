@@ -47,7 +47,11 @@
 #include "PlatformTime.h"
 #include "PostProcessing/VignettePass.h"
 
-FSceneRenderer::FSceneRenderer(UWorld* InWorld, FSceneView* InView, URenderer* InOwnerRenderer)
+FSceneRenderer::FSceneRenderer(
+	UWorld* InWorld,
+	FSceneView* InView,
+	URenderer* InOwnerRenderer
+)
 	: World(InWorld)
 	, View(InView) // 전달받은 FSceneView 저장
 	, OwnerRenderer(InOwnerRenderer)
@@ -71,9 +75,9 @@ FSceneRenderer::~FSceneRenderer()
 //====================================================================================
 // 메인 렌더 함수
 //====================================================================================
-void FSceneRenderer::Render()
+bool FSceneRenderer::ExecuteAllRenderPass()
 {
-	if (!IsValid()) return;
+	if (!IsValid()) return false;
 
 	// 뷰(View) 준비: 행렬, 절두체 등 프레임에 필요한 기본 데이터 계산
 	PrepareView();
@@ -89,7 +93,7 @@ void FSceneRenderer::Render()
 		View->RenderSettings->GetViewMode() == EViewMode::VMI_Lit_Gouraud ||
 		View->RenderSettings->GetViewMode() == EViewMode::VMI_Lit_Lambert)
 	{
-		GWorld->GetLightManager()->UpdateLightBuffer(RHIDevice);	//라이트 구조체 버퍼 업데이트, 바인딩
+		World->GetLightManager()->UpdateLightBuffer(RHIDevice);	//라이트 구조체 버퍼 업데이트, 바인딩
 		PerformTileLightCulling();	// 타일 기반 라이트 컬링 수행
 		RenderLitPath();
 		RenderPostProcessingPasses();	// 후처리 체인 실행
@@ -125,9 +129,107 @@ void FSceneRenderer::Render()
 	// FXAA 등 화면에서 최종 이미지 품질을 위해 적용되는 효과를 적용
 	ApplyScreenEffectsPass();
 
+	return true;
+}
+
+void FSceneRenderer::Render()
+{
+	if (!ExecuteAllRenderPass()) return;
+
 	// 최종적으로 Scene에 그려진 텍스쳐를 Back 버퍼에 그힌다
 	CompositeToBackBuffer();
 }
+
+//====================================================================================
+// RenderToTexture - Preview용 렌더링 (지정된 해상도의 텍스처에 렌더링하고 반환)
+//====================================================================================
+ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 TargetHeight)
+{
+	if (!ExecuteAllRenderPass()) return nullptr;
+
+	// 마지막: CompositeToBackBuffer 대신 지정된 해상도의 RenderTarget에 Composite
+	ID3D11Texture2D* ResultTexture = nullptr;
+	ID3D11RenderTargetView* ResultRTV = nullptr;
+	ID3D11Texture2D* TempDepth = nullptr;
+	ID3D11DepthStencilView* TempDSV = nullptr;
+
+	HRESULT hr = RHIDevice->CreateRenderTargetWithDepth(
+		TargetWidth, TargetHeight,
+		&ResultTexture, &ResultRTV,
+		&TempDepth, &TempDSV);
+
+	if (FAILED(hr) || !ResultTexture)
+	{
+		UE_LOG("[RenderToTexture] Error: Failed to create result render target");
+		return nullptr;
+	}
+
+	// SwapGuard로 현재 SceneColor를 Source로 만들고, 작업 후 SRV 슬롯 0을 자동 해제
+	FSwapGuard SwapGuard(RHIDevice, 0, 1);
+
+	// ResultRTV를 Target으로 설정 (깊이 버퍼 없음)
+	RHIDevice->GetDeviceContext()->OMSetRenderTargets(1, &ResultRTV, nullptr);
+
+	// Viewport 설정
+	D3D11_VIEWPORT ResultViewport = {};
+	ResultViewport.TopLeftX = 0;
+	ResultViewport.TopLeftY = 0;
+	ResultViewport.Width = static_cast<float>(TargetWidth);
+	ResultViewport.Height = static_cast<float>(TargetHeight);
+	ResultViewport.MinDepth = 0.0f;
+	ResultViewport.MaxDepth = 1.0f;
+	RHIDevice->GetDeviceContext()->RSSetViewports(1, &ResultViewport);
+
+	// 텍스처 및 샘플러 설정
+	ID3D11ShaderResourceView* SourceSRV = RHIDevice->GetCurrentSourceSRV();
+	ID3D11SamplerState* SamplerState = RHIDevice->GetSamplerState(RHI_Sampler_Index::LinearClamp);
+	if (!SourceSRV || !SamplerState)
+	{
+		UE_LOG("[RenderToTexture] Error: Missing resources for composite");
+		ResultRTV->Release();
+		ResultTexture->Release();
+		TempDepth->Release();
+		TempDSV->Release();
+		return nullptr;
+	}
+
+	// 셰이더 리소스 바인딩
+	RHIDevice->GetDeviceContext()->PSSetShaderResources(0, 1, &SourceSRV);
+	RHIDevice->GetDeviceContext()->PSSetSamplers(0, 1, &SamplerState);
+
+	// 셰이더 준비
+	UShader* FullScreenTriangleVS = UResourceManager::GetInstance().Load<UShader>("Shaders/Utility/FullScreenTriangle_VS.hlsl");
+	UShader* BlitPS = UResourceManager::GetInstance().Load<UShader>("Shaders/Utility/Blit_PS.hlsl");
+	if (!FullScreenTriangleVS || !FullScreenTriangleVS->GetVertexShader() || !BlitPS || !BlitPS->GetPixelShader())
+	{
+		UE_LOG("[RenderToTexture] Error: Blit shader not found");
+		ResultRTV->Release();
+		ResultTexture->Release();
+		TempDepth->Release();
+		TempDSV->Release();
+		return nullptr;
+	}
+	RHIDevice->PrepareShader(FullScreenTriangleVS, BlitPS);
+
+	// 그리기
+	RHIDevice->DrawFullScreenQuad();
+
+	// 모든 작업이 성공했으므로 Commit
+	SwapGuard.Commit();
+
+	// Cleanup (Texture는 반환하므로 Release 안함)
+	ResultRTV->Release();
+	TempDepth->Release();
+	TempDSV->Release();
+
+	// RenderToTexture가 사용한 SceneColor 버퍼를 청소하여 메인 World에 영향 없도록 함
+	float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	RHIDevice->GetDeviceContext()->ClearRenderTargetView(RHIDevice->GetCurrentTargetRTV(), ClearColor);
+	RHIDevice->ClearDepthBuffer(1.0f, 0);
+
+	return ResultTexture;
+}
+
 
 //====================================================================================
 // Render Path 함수 구현
@@ -209,7 +311,7 @@ void FSceneRenderer::RenderSceneDepthPath()
 
 void FSceneRenderer::RenderShadowMaps()
 {
-	FLightManager* LightManager = GWorld->GetLightManager();
+	FLightManager* LightManager = World->GetLightManager();
 	if (!LightManager) return;
 
 	// 2. 그림자 캐스터(Caster) 메시 수집
@@ -314,7 +416,7 @@ void FSceneRenderer::RenderShadowMaps()
 			RHIDevice->GetDeviceContext()->PSSetShaderResources(9, 2, NullSRV);
 			
 			float ClearColor[] = {1.0f, 1.0f, 0.0f, 0.0f};
-			EShadowAATechnique ShadowAAType = GWorld->GetRenderSettings().GetShadowAATechnique();
+			EShadowAATechnique ShadowAAType = World->GetRenderSettings().GetShadowAATechnique();
 			switch (ShadowAAType)
 			{
 			case EShadowAATechnique::PCF:
@@ -441,7 +543,7 @@ void FSceneRenderer::RenderShadowDepthPass(FShadowRenderRequest& ShadowRequest, 
 	RHIDevice->GetDeviceContext()->IASetInputLayout(ShaderVariant->InputLayout);
 	RHIDevice->GetDeviceContext()->VSSetShader(ShaderVariant->VertexShader, nullptr, 0);
 	
-	EShadowAATechnique ShadowAAType = GWorld->GetRenderSettings().GetShadowAATechnique();
+	EShadowAATechnique ShadowAAType = World->GetRenderSettings().GetShadowAATechnique();
 	switch (ShadowAAType)
 	{
 	case EShadowAATechnique::PCF:
@@ -768,8 +870,8 @@ void FSceneRenderer::PerformTileLightCulling()
 	if (bTileCullingEnabled)
 	{
 		// PointLight와 SpotLight 정보 수집
-		TArray<FPointLightInfo>& PointLights = GWorld->GetLightManager()->GetPointLightInfoList();
-		TArray<FSpotLightInfo>& SpotLights = GWorld->GetLightManager()->GetSpotLightInfoList();
+		TArray<FPointLightInfo>& PointLights = World->GetLightManager()->GetPointLightInfoList();
+		TArray<FSpotLightInfo>& SpotLights = World->GetLightManager()->GetSpotLightInfoList();
 
 		// 타일 컬링 수행
 		TileLightCuller->CullLights(
@@ -1139,7 +1241,7 @@ void FSceneRenderer::RenderDebugPass()
 	// 그리드 라인 수집
 	for (ULineComponent* LineComponent : Proxies.EditorLines)
 	{
-		if (GWorld->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Grid))
+		if (World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Grid))
 		{
 			LineComponent->CollectLineBatches(OwnerRenderer);
 		}

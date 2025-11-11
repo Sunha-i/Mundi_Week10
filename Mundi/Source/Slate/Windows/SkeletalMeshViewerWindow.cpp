@@ -13,9 +13,9 @@ void USkeletalMeshViewerWindow::Initialize()
 	Super::Initialize();
 
 	FUIWindowConfig Config = InitConfig;
-	if (TargetMesh)
+	if (TargetMeshName.Empty())
 	{
-		Config.WindowTitle = "Skeletal Mesh Viewer: " + TargetMesh->GetName();
+		Config.WindowTitle = "Skeletal Mesh Viewer: " + TargetMeshName.ToString();
 	}
 	else
 	{
@@ -25,6 +25,6 @@ void USkeletalMeshViewerWindow::Initialize()
 	SetConfig(Config);
 
 	USkeletalMeshViewportWidget* ViewportWidget = NewObject<USkeletalMeshViewportWidget>();
-	ViewportWidget->TargetMesh = TargetMesh;
+	ViewportWidget->SetSkeletalMeshToViewport(TargetMeshName);
 	AddWidget(ViewportWidget);
 }

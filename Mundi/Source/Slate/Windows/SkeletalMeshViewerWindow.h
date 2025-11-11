@@ -13,5 +13,5 @@ public:
 
 public:
 	FUIWindowConfig InitConfig;
-	USkeletalMesh* TargetMesh = nullptr;
+	FName TargetMeshName{};
 };

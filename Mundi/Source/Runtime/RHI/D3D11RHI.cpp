@@ -1187,3 +1187,179 @@ void D3D11RHI::UpdateStructuredBuffer(ID3D11Buffer* InBuffer, const void* InData
         DeviceContext->Unmap(InBuffer, 0);
     }
 }
+
+// ──────────────────────────────────────────────────────
+// 범용 텍스처 생성 함수 (Preview용 등)
+// ──────────────────────────────────────────────────────
+HRESULT D3D11RHI::CreateTexture2DWithSRV(UINT Width, UINT Height, DXGI_FORMAT Format,
+                                         ID3D11Texture2D** OutTexture, ID3D11ShaderResourceView** OutSRV)
+{
+    if (!Device || !OutTexture || !OutSRV)
+        return E_INVALIDARG;
+
+    // CreateFrameBuffer()의 SceneColor 텍스처 생성 로직 재활용
+    D3D11_TEXTURE2D_DESC textureDesc = {};
+    textureDesc.Width = Width;
+    textureDesc.Height = Height;
+    textureDesc.MipLevels = 1;
+    textureDesc.ArraySize = 1;
+    textureDesc.Format = Format;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Usage = D3D11_USAGE_DEFAULT;
+    textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;  // SRV만 필요
+    textureDesc.CPUAccessFlags = 0;
+
+    // 텍스처 생성
+    HRESULT hr = Device->CreateTexture2D(&textureDesc, nullptr, OutTexture);
+    if (FAILED(hr))
+        return hr;
+
+    // SRV 생성
+    hr = Device->CreateShaderResourceView(*OutTexture, nullptr, OutSRV);
+    if (FAILED(hr))
+    {
+        (*OutTexture)->Release();
+        *OutTexture = nullptr;
+        return hr;
+    }
+
+    return S_OK;
+}
+
+void D3D11RHI::ReleaseTexture2DWithSRV(ID3D11Texture2D** Texture, ID3D11ShaderResourceView** SRV)
+{
+    if (SRV && *SRV)
+    {
+        (*SRV)->Release();
+        *SRV = nullptr;
+    }
+
+    if (Texture && *Texture)
+    {
+        (*Texture)->Release();
+        *Texture = nullptr;
+    }
+}
+
+void D3D11RHI::CopyTexture(ID3D11Texture2D* DestTexture, ID3D11Texture2D* SourceTexture)
+{
+    if (!DeviceContext || !DestTexture || !SourceTexture)
+        return;
+
+    // 텍스처 해상도 확인
+    D3D11_TEXTURE2D_DESC destDesc, srcDesc;
+    DestTexture->GetDesc(&destDesc);
+    SourceTexture->GetDesc(&srcDesc);
+
+    UE_LOG("[CopyTexture] Dest: %dx%d, Source: %dx%d",
+        destDesc.Width, destDesc.Height,
+        srcDesc.Width, srcDesc.Height);
+
+    // CopyResource는 두 텍스처가 완전히 동일한 크기여야 함
+    if (destDesc.Width != srcDesc.Width || destDesc.Height != srcDesc.Height)
+    {
+        UE_LOG("[CopyTexture] ERROR: Resolution mismatch! CopyResource will fail.");
+        return;
+    }
+
+    // GPU 텍스처 복사 (매우 빠름, ~0.1ms)
+    DeviceContext->CopyResource(DestTexture, SourceTexture);
+}
+
+HRESULT D3D11RHI::CreateRenderTargetWithDepth(
+    UINT Width, UINT Height,
+    ID3D11Texture2D** OutColorTexture,
+    ID3D11RenderTargetView** OutColorRTV,
+    ID3D11Texture2D** OutDepthTexture,
+    ID3D11DepthStencilView** OutDepthDSV)
+{
+    if (!Device || !OutColorTexture || !OutColorRTV || !OutDepthTexture || !OutDepthDSV)
+        return E_INVALIDARG;
+
+    HRESULT hr;
+
+    // 1. Color Texture + RTV 생성
+    D3D11_TEXTURE2D_DESC colorDesc = {};
+    colorDesc.Width = Width;
+    colorDesc.Height = Height;
+    colorDesc.MipLevels = 1;
+    colorDesc.ArraySize = 1;
+    colorDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    colorDesc.SampleDesc.Count = 1;
+    colorDesc.Usage = D3D11_USAGE_DEFAULT;
+    colorDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+    hr = Device->CreateTexture2D(&colorDesc, nullptr, OutColorTexture);
+    if (FAILED(hr)) return hr;
+
+    hr = Device->CreateRenderTargetView(*OutColorTexture, nullptr, OutColorRTV);
+    if (FAILED(hr))
+    {
+        (*OutColorTexture)->Release();
+        *OutColorTexture = nullptr;
+        return hr;
+    }
+
+    // 2. Depth Texture + DSV 생성
+    D3D11_TEXTURE2D_DESC depthDesc = {};
+    depthDesc.Width = Width;
+    depthDesc.Height = Height;
+    depthDesc.MipLevels = 1;
+    depthDesc.ArraySize = 1;
+    depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    depthDesc.SampleDesc.Count = 1;
+    depthDesc.Usage = D3D11_USAGE_DEFAULT;
+    depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+    hr = Device->CreateTexture2D(&depthDesc, nullptr, OutDepthTexture);
+    if (FAILED(hr))
+    {
+        (*OutColorRTV)->Release();
+        (*OutColorTexture)->Release();
+        *OutColorRTV = nullptr;
+        *OutColorTexture = nullptr;
+        return hr;
+    }
+
+    hr = Device->CreateDepthStencilView(*OutDepthTexture, nullptr, OutDepthDSV);
+    if (FAILED(hr))
+    {
+        (*OutDepthTexture)->Release();
+        (*OutColorRTV)->Release();
+        (*OutColorTexture)->Release();
+        *OutDepthTexture = nullptr;
+        *OutColorRTV = nullptr;
+        *OutColorTexture = nullptr;
+        return hr;
+    }
+
+    return S_OK;
+}
+
+void D3D11RHI::ReleaseRenderTargetWithDepth(
+    ID3D11Texture2D** ColorTexture,
+    ID3D11RenderTargetView** ColorRTV,
+    ID3D11Texture2D** DepthTexture,
+    ID3D11DepthStencilView** DepthDSV)
+{
+    if (DepthDSV && *DepthDSV)
+    {
+        (*DepthDSV)->Release();
+        *DepthDSV = nullptr;
+    }
+    if (DepthTexture && *DepthTexture)
+    {
+        (*DepthTexture)->Release();
+        *DepthTexture = nullptr;
+    }
+    if (ColorRTV && *ColorRTV)
+    {
+        (*ColorRTV)->Release();
+        *ColorRTV = nullptr;
+    }
+    if (ColorTexture && *ColorTexture)
+    {
+        (*ColorTexture)->Release();
+        *ColorTexture = nullptr;
+    }
+}
