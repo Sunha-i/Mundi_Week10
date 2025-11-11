@@ -220,16 +220,28 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		ImGui::Text("Mesh: %s", TargetMeshName.ToString().c_str());
 		ImGui::Separator();
 
-		// 디버그 정보 표시
+		// +-+-+ Debug Info +-+-+
 		// ImGui::Text("Debug Info:");
 		// ImGui::Text("- PreviewSRV: %s", PreviewSRV ? "OK" : "NULL");
 		// ImGui::Text("- PreviewTexture: %s", PreviewTexture ? "OK" : "NULL");
 
-		FViewportClient* ViewportClient = Viewport.GetViewportClient();
-		ID3D11Texture2D* RenderedTexture = nullptr;
+		// +-+-+ Dynamic Resizing +-+-+
+		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+		float newWidth = viewportPanelSize.x;
+		float newHeight = viewportPanelSize.y;
 
+		// 크기가 변경된 경우, 렌더 타겟 재생성
+		if (newWidth > 0 && newHeight > 0 && (PreviewTextureWidth != static_cast<uint32>(newWidth) || PreviewTextureHeight != static_cast<uint32>(newHeight)))
+		{
+			ReleasePreviewRenderTarget();
+			CreatePreviewRenderTarget(static_cast<uint32>(newWidth), static_cast<uint32>(newHeight));
+			Viewport.Resize(0, 0, static_cast<uint32>(newWidth), static_cast<uint32>(newHeight));
+		}
+
+		FViewportClient* ViewportClient = Viewport.GetViewportClient();
 		// ImGui::Text("- ViewportClient: %s", ViewportClient ? "OK" : "NULL");
 
+		ID3D11Texture2D* RenderedTexture = nullptr;
 		RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
 
 		D3D11RHI* RHI = URenderManager::GetInstance().GetRenderer()->GetRHIDevice();
@@ -241,12 +253,8 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		{
 			RHI->CopyTexture(PreviewTexture, RenderedTexture);
 
-			// ImGui에 PreviewSRV 표시 (고정 크기)
-			ImVec2 PreviewImageSize(
-				static_cast<float>(PreviewTextureWidth),
-				static_cast<float>(PreviewTextureHeight)
-			);
-			ImGui::Image((void*)PreviewSRV, PreviewImageSize);
+			// ImGui에 PreviewSRV 표시 (동적 크기)
+			ImGui::Image((void*)PreviewSRV, ImVec2(newWidth, newHeight));
 
 			// 1) 드래그 시작 조건: ImGui::Image 위에서 우클릭을 시작했을 때
 			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1))		// 1: MouseRight (Only process RT)
