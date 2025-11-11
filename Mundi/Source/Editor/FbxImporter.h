@@ -9,31 +9,95 @@ struct FSkeletalMesh;
 struct FStaticMesh;
 struct FFlesh;
 
+// FBX 스케일 통합 (cm 기준)
+constexpr float FBXUnitScale = 0.01f;
+// ============================================================================
+// [FBX 유틸리티] 공통 변환 / 단위 스케일
+// ============================================================================
+namespace FBXUtil
+{
+	constexpr float UnitScale = 0.01f;
+
+	inline FVector ConvertPosition(const FbxVector4& Pos)
+	{
+		return FVector(
+			static_cast<float>(Pos[0]),
+			static_cast<float>(Pos[1]),
+			static_cast<float>(Pos[2])) * UnitScale;
+	}
+
+	inline FVector ConvertNormal(const FbxVector4& Normal)
+	{
+		return FVector(
+			static_cast<float>(Normal[0]),
+			static_cast<float>(Normal[1]),
+			static_cast<float>(Normal[2]));
+	}
+
+	inline FVector4 DefaultTangent()
+	{
+		return FVector4(1.0f, 0.0f, 0.0f, 1.0f);
+	}
+}
+
 class FFbxImporter
 {
 public:
-    explicit FFbxImporter(FbxManager* InSdkManager) : SdkManager(InSdkManager) {}
-    ~FFbxImporter() = default;
+	explicit FFbxImporter(FbxManager* InSdkManager) : SdkManager(InSdkManager) {}
+	~FFbxImporter() = default;
+
 public:
-    // Scene / materials
-    FbxScene* ImportFbxScene(const FString& Path);
-    void CollectMaterials(FbxScene* Scene, TMap<int64, FMaterialInfo>& OutMatMap, TArray<FMaterialInfo>& OutMaterialInfos, const FString& Path);
+	// =======================
+	//  FBX Scene 로드
+	// =======================
+	FbxScene* ImportFbxScene(const FString& Path);
 
-    // Skeleton helpers
-    UBone* FindSkeletonRootAndBuild(FbxNode* RootNode);
-    UBone* ProcessSkeletonNode(FbxNode* InNode, UBone* InParent = nullptr);
-    FTransform ConvertFbxTransform(const FbxAMatrix& InMatrix);
+	// =======================
+	//  Material 파싱
+	// =======================
+	void CollectMaterials(
+		FbxScene* Scene,
+		const FString& Path,
+		TMap<int64, FMaterialInfo>& OutMatMap,
+		TArray<FMaterialInfo>& OutInfos
+	);
 
-    // Mesh extraction (skeletal)
-    void ProcessMeshNode(FbxNode* InNode, FSkeletalMesh* OutSkeletalMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
-    void ExtractMeshData(FbxMesh* InMesh, FSkeletalMesh* OutSkeletalMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
-    void ExtractSkinningData(FbxMesh* InMesh, FFlesh& OutFlesh, const TMap<FString, UBone*>& BoneMap);
+	// =======================
+	//  Skeleton 처리
+	// =======================
+	UBone* FindSkeletonRootAndBuild(FbxNode* RootNode);
+	UBone* ProcessSkeletonNode(FbxNode* InNode, UBone* InParent = nullptr);
+	FTransform ConvertFbxTransform(const FbxAMatrix& InMatrix);
 
-    // Mesh extraction (static)
-    void ProcessMeshNodeAsStatic(FbxNode* InNode, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
-    void ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap);
-    bool BuildStaticMeshFromPath(const FString& Path, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos);
+	// =======================
+	//  Skeletal Mesh
+	// =======================
+	void ProcessMeshNode(
+		FbxNode* InNode,
+		FSkeletalMesh* OutSkeletalMesh,
+		const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap
+	);
+	void ExtractSkinningData(
+		FbxMesh* InMesh,
+		FFlesh& OutFlesh,
+		const TMap<FString, UBone*>& BoneMap
+	);
+
+	// =======================
+	//  Static Mesh
+	// =======================
+	void ProcessMeshNodeAsStatic(
+		FbxNode* InNode,
+		FStaticMesh* OutStaticMesh,
+		const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap
+	);
+	bool BuildStaticMeshFromPath(
+		const FString& Path,
+		FStaticMesh* OutStaticMesh,
+		TArray<FMaterialInfo>& OutMaterialInfos
+	);
+
 private:
-    FbxManager* SdkManager = nullptr;
+	FbxManager* SdkManager = nullptr;
 };
 

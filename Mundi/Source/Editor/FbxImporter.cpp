@@ -1,853 +1,452 @@
 ﻿#include "pch.h"
-
 #include "FbxImporter.h"
 #include "Bone.h"
 #include "SkeletalMeshStruct.h"
 #include "StaticMesh.h"
 
+#include <fbxsdk/utils/fbxrootnodeutility.h>
 
+// ============================================================================
+// [FBX 임포트] Scene 불러오기
+// ============================================================================
 FbxScene* FFbxImporter::ImportFbxScene(const FString& Path)
 {
-    FbxImporter* Importer = FbxImporter::Create(SdkManager, "");
-    if (!Importer->Initialize(Path.c_str(), -1, SdkManager->GetIOSettings()))
-    {
-        UE_LOG("Failed to initialize FBX importer: %s", Path.c_str());
-        UE_LOG("Error: %s", Importer->GetStatus().GetErrorString());
-        Importer->Destroy();
-        return nullptr;
-    }
-
-    FbxScene* Scene = FbxScene::Create(SdkManager, "ImportScene");
-    if (!Importer->Import(Scene))
-    {
-        UE_LOG("Failed to import FBX scene: %s", Path.c_str());
-        Scene->Destroy();
-        Importer->Destroy();
-        return nullptr;
-    }
-
-    Importer->Destroy();
-    return Scene;
-}
-
-void FFbxImporter::CollectMaterials(FbxScene* Scene, TMap<int64, FMaterialInfo>& OutMatMap, TArray<FMaterialInfo>& OutMaterialInfos, const FString& Path)
-{
-    if (!Scene) return;
-
-    std::filesystem::path FbxDir = std::filesystem::path(Path).parent_path();
-    auto ExtractTexturePath = [&FbxDir](FbxProperty& Prop) -> FString
-        {
-            FString TexPath = "";
-            if (auto* FileTex = Prop.GetSrcObject<FbxFileTexture>(0))
-            {
-                TexPath = NormalizePath(FString(FileTex->GetFileName()));
-                if (!std::filesystem::exists(TexPath))
-                {
-                    std::filesystem::path Relative = FbxDir / std::filesystem::path(TexPath).filename();
-                    if (std::filesystem::exists(Relative))
-                        TexPath = NormalizePath(Relative.string());
-                }
-            }
-            return TexPath;
-        };
-
-    const int MatCount = Scene->GetMaterialCount();
-    for (int i = 0; i < MatCount; i++)
-    {
-        FbxSurfaceMaterial* Mat = Scene->GetMaterial(i);
-        if (!Mat) continue;
-
-        FMaterialInfo Info;
-        Info.MaterialName = Mat->GetName();
-        int64 MatID = Mat->GetUniqueID();
-
-        if (auto DiffProp = Mat->FindProperty(FbxSurfaceMaterial::sDiffuse); DiffProp.IsValid())
-        {
-            FbxDouble3 Color = DiffProp.Get<FbxDouble3>();
-            Info.DiffuseColor = FVector((float)Color[0], (float)Color[1], (float)Color[2]);
-            Info.DiffuseTextureFileName = ExtractTexturePath(DiffProp);
-        }
-
-        OutMatMap.Add(MatID, Info);
-        OutMaterialInfos.Add(Info);
-    }
-}
-
-UBone* FFbxImporter::FindSkeletonRootAndBuild(FbxNode* RootNode)
-{
-    for (int i = 0; i < RootNode->GetChildCount(); i++)
-    {
-        FbxNode* Child = RootNode->GetChild(i);
-        if (auto* Attr = Child->GetNodeAttribute())
-        {
-            if (Attr->GetAttributeType() == FbxNodeAttribute::eSkeleton)
-                return ProcessSkeletonNode(Child);
-        }
-    }
-    return nullptr;
-}
-
-UBone* FFbxImporter::ProcessSkeletonNode(FbxNode* InNode, UBone* InParent)
-{
-    if (!InNode)
-        return nullptr;
-
-    FbxAMatrix LocalTransform = InNode->EvaluateLocalTransform();
-    FTransform BoneTransform = ConvertFbxTransform(LocalTransform);
-
-    FName BoneName(InNode->GetName());
-    UBone* NewBone = new UBone(BoneName, BoneTransform);
-    ObjectFactory::AddToGUObjectArray(UBone::StaticClass(), NewBone);
-    NewBone->SetRelativeBindPoseTransform(BoneTransform);
-
-    if (InParent)
-    {
-        InParent->AddChild(NewBone);
-        NewBone->SetParent(InParent);
-    }
-
-    for (int i = 0; i < InNode->GetChildCount(); i++)
-    {
-        FbxNode* ChildNode = InNode->GetChild(i);
-        FbxNodeAttribute* Attr = ChildNode->GetNodeAttribute();
-        if (Attr && Attr->GetAttributeType() == FbxNodeAttribute::eSkeleton)
-        {
-            ProcessSkeletonNode(ChildNode, NewBone);
-        }
-    }
-
-    return NewBone;
-}
-
-
-FTransform FFbxImporter::ConvertFbxTransform(const FbxAMatrix& InMatrix)
-{
-    FTransform Result;
-
-    FbxVector4 Translation = InMatrix.GetT();
-    Result.Translation = FVector(static_cast<float>(Translation[0]),
-                                  static_cast<float>(-Translation[1]),
-                                  static_cast<float>(Translation[2]));
-
-    FbxQuaternion Rotation = InMatrix.GetQ();
-    Result.Rotation = FQuat(static_cast<float>(Rotation[0]),
-                            static_cast<float>(-Rotation[1]),
-                            static_cast<float>(-Rotation[2]),
-                            static_cast<float>(Rotation[3]));
-
-    FbxVector4 Scale = InMatrix.GetS();
-    Result.Scale3D = FVector(static_cast<float>(Scale[0]),
-                             static_cast<float>(Scale[1]),
-                             static_cast<float>(Scale[2]));
-
-    return Result;
-}
-
-void FFbxImporter::ProcessMeshNode(FbxNode* InNode, FSkeletalMesh* OutSkeletalMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
-{
-    if (!InNode || !OutSkeletalMesh)
-        return;
-
-    FbxNodeAttribute* Attr = InNode->GetNodeAttribute();
-    if (Attr && Attr->GetAttributeType() == FbxNodeAttribute::eMesh)
-    {
-        FbxMesh* Mesh = InNode->GetMesh();
-        if (Mesh)
-        {
-            ExtractMeshData(Mesh, OutSkeletalMesh, MaterialIDToInfoMap);
-        }
-    }
-
-    for (int i = 0; i < InNode->GetChildCount(); i++)
-    {
-        ProcessMeshNode(InNode->GetChild(i), OutSkeletalMesh, MaterialIDToInfoMap);
-    }
-}
-
-void FFbxImporter::ExtractMeshData(FbxMesh* InMesh, FSkeletalMesh* OutSkeletalMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
-{
-    if (!InMesh || !OutSkeletalMesh)
-        return;
-
-    uint32 BaseVertexOffset = static_cast<uint32>(OutSkeletalMesh->Vertices.size());
-    uint32 BaseIndexOffset = static_cast<uint32>(OutSkeletalMesh->Indices.size());
-
-    int VertexCount = InMesh->GetControlPointsCount();
-    FbxVector4* ControlPoints = InMesh->GetControlPoints();
-
-    TArray<FNormalVertex> Vertices;
-    TArray<uint32> Indices;
-
-    int PolygonCount = InMesh->GetPolygonCount();
-    TMap<int, TArray<uint32>> PolyIdxToVertexIndices;
-    int ProcessedTriangleCount = 0;
-
-    int TriangleCount = 0;
-    int QuadCount = 0;
-    int NgonCount = 0;
-    int TotalNgonVertices = 0;
-
-    for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
-    {
-        int PolySize = InMesh->GetPolygonSize(PolyIdx);
-
-        if (PolySize == 3) TriangleCount++;
-        else if (PolySize == 4) QuadCount++;
-        else if (PolySize > 4)
-        {
-            NgonCount++;
-            TotalNgonVertices += PolySize;
-        }
-
-        if (PolySize < 3)
-        {
-            UE_LOG("[Warning] Invalid polygon with %d vertices at index %d - skipping", PolySize, PolyIdx);
-            continue;
-        }
-
-        int NumTriangles = PolySize - 2;
-
-        for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
-        {
-            TArray<uint32> TriangleIndices;
-
-            int V0 = 0;
-            int V1 = TriIdx + 2;
-            int V2 = TriIdx + 1;
-
-            for (int LocalVertIdx : {V0, V1, V2})
-            {
-                int ControlPointIdx = InMesh->GetPolygonVertex(PolyIdx, LocalVertIdx);
-
-                FNormalVertex Vertex;
-
-                FbxVector4 Pos = ControlPoints[ControlPointIdx];
-                Vertex.pos = FVector(static_cast<float>(Pos[0]), static_cast<float>(-Pos[1]), static_cast<float>(Pos[2]));
-
-                FbxVector4 Normal;
-                if (InMesh->GetPolygonVertexNormal(PolyIdx, LocalVertIdx, Normal))
-                {
-                    Vertex.normal = FVector(static_cast<float>(Normal[0]), static_cast<float>(-Normal[1]), static_cast<float>(Normal[2]));
-                }
-
-                FbxGeometryElementTangent* TangentElement = InMesh->GetElementTangent();
-                if (TangentElement)
-                {
-                    int TangentIndex = -1;
-                    int PolyVertIndex = InMesh->GetPolygonVertexIndex(PolyIdx) + LocalVertIdx;
-
-                    if (TangentElement->GetMappingMode() == FbxGeometryElement::eByPolygonVertex)
-                    {
-                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
-                        {
-                            TangentIndex = PolyVertIndex;
-                        }
-                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
-                        {
-                            TangentIndex = TangentElement->GetIndexArray().GetAt(PolyVertIndex);
-                        }
-                    }
-                    else if (TangentElement->GetMappingMode() == FbxGeometryElement::eByControlPoint)
-                    {
-                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
-                        {
-                            TangentIndex = ControlPointIdx;
-                        }
-                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
-                        {
-                            TangentIndex = TangentElement->GetIndexArray().GetAt(ControlPointIdx);
-                        }
-                    }
-
-                    if (TangentIndex >= 0 && TangentIndex < TangentElement->GetDirectArray().GetCount())
-                    {
-                        FbxVector4 Tangent = TangentElement->GetDirectArray().GetAt(TangentIndex);
-                        Vertex.Tangent = FVector4(
-                            static_cast<float>(Tangent[0]),
-                            static_cast<float>(-Tangent[1]),
-                            static_cast<float>(Tangent[2]),
-                            static_cast<float>(Tangent[3])
-                        );
-                    }
-                    else
-                    {
-                        Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
-                    }
-                }
-                else
-                {
-                    Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
-                }
-
-                FbxStringList UVSetNames;
-                InMesh->GetUVSetNames(UVSetNames);
-                if (UVSetNames.GetCount() > 0)
-                {
-                    FbxVector2 UV;
-                    bool bUnmapped;
-                    if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
-                    {
-                        Vertex.tex = FVector2D(static_cast<float>(UV[0]), 1.0f - static_cast<float>(UV[1]));
-                    }
-                }
-
-                uint32 VertexIndex = static_cast<uint32>(Vertices.size());
-                Vertices.Add(Vertex);
-                TriangleIndices.Add(VertexIndex);
-            }
-
-            int StorageKey = PolyIdx * 100 + TriIdx;
-            PolyIdxToVertexIndices.Add(StorageKey, TriangleIndices);
-            ProcessedTriangleCount++;
-        }
-    }
-
-    FbxLayerElementMaterial* MaterialElement = InMesh->GetElementMaterial();
-    TMap<int, TArray<int>> MaterialToTriangles;
-
-    if (MaterialElement)
-    {
-        for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
-        {
-            int PolySize = InMesh->GetPolygonSize(PolyIdx);
-            if (PolySize < 3)
-                continue;
-
-            int MaterialIndex = 0;
-
-            if (MaterialElement->GetMappingMode() == FbxLayerElement::eByPolygon)
-            {
-                if (MaterialElement->GetReferenceMode() == FbxLayerElement::eIndexToDirect)
-                {
-                    MaterialIndex = MaterialElement->GetIndexArray().GetAt(PolyIdx);
-                }
-                else if (MaterialElement->GetReferenceMode() == FbxLayerElement::eDirect)
-                {
-                    MaterialIndex = PolyIdx;
-                }
-            }
-
-            if (!MaterialToTriangles.Contains(MaterialIndex))
-            {
-                MaterialToTriangles.Add(MaterialIndex, TArray<int>());
-            }
-
-            int NumTriangles = PolySize - 2;
-            for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
-            {
-                int StorageKey = PolyIdx * 100 + TriIdx;
-                MaterialToTriangles[MaterialIndex].Add(StorageKey);
-            }
-        }
-    }
-    else
-    {
-        TArray<int> AllTriangles;
-        for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
-        {
-            int PolySize = InMesh->GetPolygonSize(PolyIdx);
-            if (PolySize < 3)
-                continue;
-
-            int NumTriangles = PolySize - 2;
-            for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
-            {
-                int StorageKey = PolyIdx * 100 + TriIdx;
-                AllTriangles.Add(StorageKey);
-            }
-        }
-        MaterialToTriangles.Add(0, AllTriangles);
-    }
-
-    TArray<uint32> ReorderedIndices;
-    ReorderedIndices.reserve(Indices.Num());
-    uint32 CurrentStartIndex = BaseIndexOffset;
-
-    TArray<int> SortedMaterialIndices;
-    for (auto& Pair : MaterialToTriangles)
-    {
-        SortedMaterialIndices.Add(Pair.first);
-    }
-    SortedMaterialIndices.Sort();
-
-    TMap<FString, UBone*> BoneMap;
-    if (OutSkeletalMesh->Skeleton)
-    {
-        OutSkeletalMesh->Skeleton->ForEachBone([&BoneMap](UBone* Bone) {
-            if (Bone)
-            {
-                FString BoneName = Bone->GetName().ToString();
-                BoneMap.Add(BoneName, Bone);
-            }
-            });
-    }
-
-    for (int MaterialIndex : SortedMaterialIndices)
-    {
-        TArray<int>& TriangleIndices = MaterialToTriangles[MaterialIndex];
-
-        FFlesh NewFlesh;
-        NewFlesh.StartIndex = CurrentStartIndex;
-        NewFlesh.IndexCount = 0;
-
-        for (int StorageKey : TriangleIndices)
-        {
-            TArray<uint32>* VertexIndicesPtr = PolyIdxToVertexIndices.Find(StorageKey);
-            if (!VertexIndicesPtr || VertexIndicesPtr->Num() != 3)
-                continue;
-
-            const TArray<uint32>& VertexIndices = *VertexIndicesPtr;
-            ReorderedIndices.Add(VertexIndices[0] + BaseVertexOffset);
-            ReorderedIndices.Add(VertexIndices[1] + BaseVertexOffset);
-            ReorderedIndices.Add(VertexIndices[2] + BaseVertexOffset);
-            NewFlesh.IndexCount += 3;
-        }
-
-        if (MaterialElement && MaterialIndex < InMesh->GetNode()->GetMaterialCount())
-        {
-            FbxSurfaceMaterial* Material = InMesh->GetNode()->GetMaterial(MaterialIndex);
-            if (Material)
-            {
-                FString MaterialName = Material->GetName();
-                int64 MaterialID = Material->GetUniqueID();
-
-                if (const FMaterialInfo* FoundMatInfo = MaterialIDToInfoMap.Find(MaterialID))
-                {
-                    NewFlesh.InitialMaterialName = FoundMatInfo->MaterialName;
-                    UE_LOG("[Flesh Material] Assigned Material '%s' to Flesh (StartIndex=%d, IndexCount=%d)",
-                        NewFlesh.InitialMaterialName.c_str(), NewFlesh.StartIndex, NewFlesh.IndexCount);
-                }
-                else
-                {
-                    NewFlesh.InitialMaterialName = MaterialName;
-                    UE_LOG("[Flesh Material] Material[%lld]='%s' not found in map - using name directly",
-                        MaterialID, MaterialName.c_str());
-                }
-            }
-        }
-        else
-        {
-            NewFlesh.InitialMaterialName = "DefaultMaterial";
-            UE_LOG("[Flesh Material] No material assigned - using DefaultMaterial");
-        }
-
-        ExtractSkinningData(InMesh, NewFlesh, BoneMap);
-
-        OutSkeletalMesh->Fleshes.Add(NewFlesh);
-        CurrentStartIndex += NewFlesh.IndexCount;
-    }
-
-    OutSkeletalMesh->Vertices.insert(OutSkeletalMesh->Vertices.end(), Vertices.begin(), Vertices.end());
-    OutSkeletalMesh->Indices.insert(OutSkeletalMesh->Indices.end(), ReorderedIndices.begin(), ReorderedIndices.end());
-    OutSkeletalMesh->bHasMaterial = OutSkeletalMesh->bHasMaterial || (InMesh->GetElementMaterialCount() > 0);
-}
-
-void FFbxImporter::ExtractSkinningData(FbxMesh* InMesh, FFlesh& OutFlesh, const TMap<FString, UBone*>& BoneMap)
-{
-    if (!InMesh)
-        return;
-
-    int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
-    if (SkinCount == 0)
-        return;
-
-    FbxSkin* Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
-    int ClusterCount = Skin->GetClusterCount();
-
-    TArray<UBone*> Bones;
-    TArray<float> Weights;
-    float WeightsTotal = 0.0f;
-
-    for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ClusterIdx++)
-    {
-        FbxCluster* Cluster = Skin->GetCluster(ClusterIdx);
-        if (!Cluster || !Cluster->GetLink())
-            continue;
-
-        FString BoneName(Cluster->GetLink()->GetName());
-        UBone* const* FoundBone = BoneMap.Find(BoneName);
-
-        if (FoundBone && *FoundBone)
-        {
-            Bones.Add(*FoundBone);
-
-            int* Indices = Cluster->GetControlPointIndices();
-            double* Weights_Raw = Cluster->GetControlPointWeights();
-            int IndexCount = Cluster->GetControlPointIndicesCount();
-
-            float AvgWeight = 0.0f;
-            for (int i = 0; i < IndexCount; i++)
-            {
-                AvgWeight += static_cast<float>(Weights_Raw[i]);
-            }
-            AvgWeight /= (IndexCount > 0 ? IndexCount : 1);
-
-            Weights.Add(AvgWeight);
-            WeightsTotal += AvgWeight;
-        }
-    }
-
-    OutFlesh.Bones = Bones;
-    OutFlesh.Weights = Weights;
-    OutFlesh.WeightsTotal = WeightsTotal;
-}
-
-void FFbxImporter::ProcessMeshNodeAsStatic(FbxNode* InNode, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
-{
-    if (!InNode || !OutStaticMesh)
-        return;
-
-    FbxNodeAttribute* Attr = InNode->GetNodeAttribute();
-    if (Attr && Attr->GetAttributeType() == FbxNodeAttribute::eMesh)
-    {
-        FbxMesh* Mesh = InNode->GetMesh();
-        if (Mesh)
-        {
-            ExtractMeshDataAsStatic(Mesh, OutStaticMesh, MaterialIDToInfoMap);
-        }
-    }
-
-    for (int i = 0; i < InNode->GetChildCount(); i++)
-    {
-        ProcessMeshNodeAsStatic(InNode->GetChild(i), OutStaticMesh, MaterialIDToInfoMap);
-    }
-}
-
-void FFbxImporter::ExtractMeshDataAsStatic(FbxMesh* InMesh, FStaticMesh* OutStaticMesh, const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
-{
-    if (!InMesh || !OutStaticMesh)
-        return;
-
-    uint32 BaseVertexOffset = static_cast<uint32>(OutStaticMesh->Vertices.size());
-    uint32 BaseIndexOffset = static_cast<uint32>(OutStaticMesh->Indices.size());
-
-    int VertexCount = InMesh->GetControlPointsCount();
-    FbxVector4* ControlPoints = InMesh->GetControlPoints();
-
-    TArray<FNormalVertex> Vertices;
-    TArray<uint32> Indices;
-
-    int PolygonCount = InMesh->GetPolygonCount();
-    TMap<int, TArray<uint32>> PolyIdxToVertexIndices;
-
-    for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
-    {
-        int PolySize = InMesh->GetPolygonSize(PolyIdx);
-        if (PolySize < 3)
-            continue;
-
-        int NumTriangles = PolySize - 2;
-
-        for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
-        {
-            TArray<uint32> TriangleIndices;
-
-            int V0 = 0;
-            int V1 = TriIdx + 2;
-            int V2 = TriIdx + 1;
-
-            for (int LocalVertIdx : {V0, V1, V2})
-            {
-                int ControlPointIdx = InMesh->GetPolygonVertex(PolyIdx, LocalVertIdx);
-
-                FNormalVertex Vertex;
-
-                FbxVector4 Pos = ControlPoints[ControlPointIdx];
-                Vertex.pos = FVector(static_cast<float>(Pos[0]), static_cast<float>(-Pos[1]), static_cast<float>(Pos[2]));
-
-                FbxVector4 Normal;
-                if (InMesh->GetPolygonVertexNormal(PolyIdx, LocalVertIdx, Normal))
-                {
-                    Vertex.normal = FVector(static_cast<float>(Normal[0]), static_cast<float>(-Normal[1]), static_cast<float>(Normal[2]));
-                }
-
-                FbxGeometryElementTangent* TangentElement = InMesh->GetElementTangent();
-                if (TangentElement)
-                {
-                    int TangentIndex = -1;
-                    int PolyVertIndex = InMesh->GetPolygonVertexIndex(PolyIdx) + LocalVertIdx;
-
-                    if (TangentElement->GetMappingMode() == FbxGeometryElement::eByPolygonVertex)
-                    {
-                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
-                        {
-                            TangentIndex = PolyVertIndex;
-                        }
-                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
-                        {
-                            TangentIndex = TangentElement->GetIndexArray().GetAt(PolyVertIndex);
-                        }
-                    }
-                    else if (TangentElement->GetMappingMode() == FbxGeometryElement::eByControlPoint)
-                    {
-                        if (TangentElement->GetReferenceMode() == FbxGeometryElement::eDirect)
-                        {
-                            TangentIndex = ControlPointIdx;
-                        }
-                        else if (TangentElement->GetReferenceMode() == FbxGeometryElement::eIndexToDirect)
-                        {
-                            TangentIndex = TangentElement->GetIndexArray().GetAt(ControlPointIdx);
-                        }
-                    }
-
-                    if (TangentIndex >= 0 && TangentIndex < TangentElement->GetDirectArray().GetCount())
-                    {
-                        FbxVector4 Tangent = TangentElement->GetDirectArray().GetAt(TangentIndex);
-                        Vertex.Tangent = FVector4(
-                            static_cast<float>(Tangent[0]),
-                            static_cast<float>(-Tangent[1]),
-                            static_cast<float>(Tangent[2]),
-                            static_cast<float>(Tangent[3])
-                        );
-                    }
-                    else
-                    {
-                        Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
-                    }
-                }
-                else
-                {
-                    Vertex.Tangent = FVector4(1.0f, 0.0f, 0.0f, 1.0f);
-                }
-
-                FbxStringList UVSetNames;
-                InMesh->GetUVSetNames(UVSetNames);
-                if (UVSetNames.GetCount() > 0)
-                {
-                    FbxVector2 UV;
-                    bool bUnmapped;
-                    if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSetNames[0], UV, bUnmapped))
-                    {
-                        Vertex.tex = FVector2D(static_cast<float>(UV[0]), 1.0f - static_cast<float>(UV[1]));
-                    }
-                }
-
-                uint32 VertexIndex = static_cast<uint32>(Vertices.size());
-                Vertices.Add(Vertex);
-                TriangleIndices.Add(VertexIndex);
-            }
-
-            int StorageKey = PolyIdx * 100 + TriIdx;
-            PolyIdxToVertexIndices.Add(StorageKey, TriangleIndices);
-        }
-    }
-
-    FbxLayerElementMaterial* MaterialElement = InMesh->GetElementMaterial();
-    TMap<int, TArray<int>> MaterialToTriangles;
-
-    if (MaterialElement)
-    {
-        for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
-        {
-            int PolySize = InMesh->GetPolygonSize(PolyIdx);
-            if (PolySize < 3)
-                continue;
-
-            int MaterialIndex = 0;
-            if (MaterialElement->GetMappingMode() == FbxLayerElement::eByPolygon)
-            {
-                if (MaterialElement->GetReferenceMode() == FbxLayerElement::eIndexToDirect)
-                {
-                    MaterialIndex = MaterialElement->GetIndexArray().GetAt(PolyIdx);
-                }
-            }
-
-            if (!MaterialToTriangles.Contains(MaterialIndex))
-            {
-                MaterialToTriangles.Add(MaterialIndex, TArray<int>());
-            }
-
-            int NumTriangles = PolySize - 2;
-            for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
-            {
-                int StorageKey = PolyIdx * 100 + TriIdx;
-                MaterialToTriangles[MaterialIndex].Add(StorageKey);
-            }
-        }
-    }
-    else
-    {
-        TArray<int> AllTriangles;
-        for (int PolyIdx = 0; PolyIdx < PolygonCount; PolyIdx++)
-        {
-            int PolySize = InMesh->GetPolygonSize(PolyIdx);
-            if (PolySize < 3)
-                continue;
-
-            int NumTriangles = PolySize - 2;
-            for (int TriIdx = 0; TriIdx < NumTriangles; TriIdx++)
-            {
-                int StorageKey = PolyIdx * 100 + TriIdx;
-                AllTriangles.Add(StorageKey);
-            }
-        }
-        MaterialToTriangles.Add(0, AllTriangles);
-    }
-
-    TArray<uint32> ReorderedIndices;
-    uint32 CurrentStartIndex = BaseIndexOffset;
-
-    TArray<int> SortedMaterialIndices;
-    for (auto& Pair : MaterialToTriangles)
-    {
-        SortedMaterialIndices.Add(Pair.first);
-    }
-    SortedMaterialIndices.Sort();
-
-    for (int MaterialIndex : SortedMaterialIndices)
-    {
-        TArray<int>& TriangleIndices = MaterialToTriangles[MaterialIndex];
-
-        FGroupInfo NewGroup;
-        NewGroup.StartIndex = CurrentStartIndex;
-        NewGroup.IndexCount = 0;
-
-        for (int StorageKey : TriangleIndices)
-        {
-            TArray<uint32>* VertexIndicesPtr = PolyIdxToVertexIndices.Find(StorageKey);
-            if (!VertexIndicesPtr || VertexIndicesPtr->Num() != 3)
-                continue;
-
-            const TArray<uint32>& VertexIndices = *VertexIndicesPtr;
-            ReorderedIndices.Add(VertexIndices[0] + BaseVertexOffset);
-            ReorderedIndices.Add(VertexIndices[1] + BaseVertexOffset);
-            ReorderedIndices.Add(VertexIndices[2] + BaseVertexOffset);
-            NewGroup.IndexCount += 3;
-        }
-
-        if (MaterialElement && MaterialIndex < InMesh->GetNode()->GetMaterialCount())
-        {
-            FbxSurfaceMaterial* Material = InMesh->GetNode()->GetMaterial(MaterialIndex);
-            if (Material)
-            {
-                int64 MaterialID = Material->GetUniqueID();
-                if (const FMaterialInfo* FoundMatInfo = MaterialIDToInfoMap.Find(MaterialID))
-                {
-                    NewGroup.InitialMaterialName = FoundMatInfo->MaterialName;
-                }
-                else
-                {
-                    NewGroup.InitialMaterialName = Material->GetName();
-                }
-            }
-        }
-        else
-        {
-            NewGroup.InitialMaterialName = "DefaultMaterial";
-        }
-
-        OutStaticMesh->GroupInfos.Add(NewGroup);
-        CurrentStartIndex += NewGroup.IndexCount;
-    }
-
-    OutStaticMesh->Vertices.insert(OutStaticMesh->Vertices.end(), Vertices.begin(), Vertices.end());
-    OutStaticMesh->Indices.insert(OutStaticMesh->Indices.end(), ReorderedIndices.begin(), ReorderedIndices.end());
-    OutStaticMesh->bHasMaterial = OutStaticMesh->bHasMaterial || (InMesh->GetElementMaterialCount() > 0);
-}
-
-bool FFbxImporter::BuildStaticMeshFromPath(const FString& Path, FStaticMesh* OutStaticMesh, TArray<FMaterialInfo>& OutMaterialInfos)
-{
-	if (!OutStaticMesh)
-		return false;
-
-	// FBX Importer 초기화
-	FbxImporter* LocalImporter = FbxImporter::Create(SdkManager, "");
-	if (!LocalImporter->Initialize(Path.c_str(), -1, SdkManager->GetIOSettings()))
+	FbxImporter* Importer = FbxImporter::Create(SdkManager, "");
+	if (!Importer->Initialize(Path.c_str(), -1, SdkManager->GetIOSettings()))
 	{
-		LocalImporter->Destroy();
-		return false;
+		UE_LOG("Failed to initialize FBX importer: %s", Path.c_str());
+		UE_LOG("Error: %s", Importer->GetStatus().GetErrorString());
+		Importer->Destroy();
+		return nullptr;
 	}
 
-	// 씬 로드
-	FbxScene* Scene = FbxScene::Create(SdkManager, "StaticMeshScene");
-	if (!LocalImporter->Import(Scene))
+	FbxScene* Scene = FbxScene::Create(SdkManager, "ImportScene");
+	if (!Importer->Import(Scene))
 	{
-		LocalImporter->Destroy();
+		UE_LOG("Failed to import FBX scene: %s", Path.c_str());
 		Scene->Destroy();
-		return false;
+		Importer->Destroy();
+		return nullptr;
 	}
-	LocalImporter->Destroy();
 
-	// 메시 초기화
-	OutStaticMesh->Vertices.clear();
-	OutStaticMesh->Indices.clear();
-	OutStaticMesh->GroupInfos.clear();
-	OutStaticMesh->bHasMaterial = false;
-	OutStaticMesh->PathFileName = Path;
+	Importer->Destroy();
 
-	// 머티리얼 파싱
-	TMap<int64, FMaterialInfo> MaterialIDToInfoMap;
-	int MaterialCount = Scene->GetMaterialCount();
+	FbxAxisSystem SourceAxis = Scene->GetGlobalSettings().GetAxisSystem();
+	FbxAxisSystem::ECoordSystem CoordSystem = FbxAxisSystem::eLeftHanded;
+	FbxAxisSystem::EUpVector UpVector = FbxAxisSystem::eZAxis;
+	FbxAxisSystem::EFrontVector FrontVector = FbxAxisSystem::eParityEven;
+	FbxAxisSystem TargetAxis(UpVector, FrontVector, CoordSystem);
+	if (SourceAxis != TargetAxis)
+	{
+		FbxRootNodeUtility::RemoveAllFbxRoots(Scene);
+		TargetAxis.DeepConvertScene(Scene);
+		Scene->GetGlobalSettings().SetAxisSystem(TargetAxis);
+	}
+
+	return Scene;
+}
+// ============================================================================
+// [FBX 머티리얼 파싱] 스태틱/스켈레탈 공용
+// ============================================================================
+void FFbxImporter::CollectMaterials(FbxScene* Scene, const FString& Path,
+	TMap<int64, FMaterialInfo>& OutMatMap, TArray<FMaterialInfo>& OutInfos)
+{
+	if (!Scene) return;
+
 	std::filesystem::path FbxDir = std::filesystem::path(Path).parent_path();
 
 	auto ExtractTexturePath = [&FbxDir](FbxProperty& Prop) -> FString
 		{
-			FString TexturePath = "";
-			int FileTextureCount = Prop.GetSrcObjectCount<FbxFileTexture>();
-			if (FileTextureCount > 0)
+			FString TexPath = "";
+			if (auto* FileTex = Prop.GetSrcObject<FbxFileTexture>(0))
 			{
-				FbxFileTexture* FileTexture = Prop.GetSrcObject<FbxFileTexture>(0);
-				if (FileTexture)
+				TexPath = NormalizePath(FString(FileTex->GetFileName()));
+				if (!std::filesystem::exists(TexPath))
 				{
-					const char* FileName = FileTexture->GetFileName();
-					if (FileName && strlen(FileName) > 0)
-					{
-						TexturePath = FileName;
-						std::filesystem::path TexPath(TexturePath);
-						if (!std::filesystem::exists(TexPath))
-						{
-							std::filesystem::path RelativePath = FbxDir / TexPath.filename();
-							if (std::filesystem::exists(RelativePath))
-							{
-								TexturePath = RelativePath.string();
-							}
-						}
-						TexturePath = NormalizePath(TexturePath);
-					}
+					std::filesystem::path Relative = FbxDir / std::filesystem::path(TexPath).filename();
+					if (std::filesystem::exists(Relative))
+						TexPath = NormalizePath(Relative.string());
 				}
 			}
-			return TexturePath;
+			return TexPath;
 		};
 
-	// 머티리얼 루프
-	for (int i = 0; i < MaterialCount; i++)
+	const int MatCount = Scene->GetMaterialCount();
+	for (int i = 0; i < MatCount; i++)
 	{
-		FbxSurfaceMaterial* Material = Scene->GetMaterial(i);
-		if (!Material)
-			continue;
+		FbxSurfaceMaterial* Mat = Scene->GetMaterial(i);
+		if (!Mat) continue;
 
-		FMaterialInfo MatInfo;
-		MatInfo.MaterialName = Material->GetName();
-		int64 MaterialID = Material->GetUniqueID();
+		FMaterialInfo Info;
+		Info.MaterialName = Mat->GetName();
+		int64 MatID = Mat->GetUniqueID();
 
-		FbxProperty DiffuseProp = Material->FindProperty(FbxSurfaceMaterial::sDiffuse);
-		if (DiffuseProp.IsValid())
+		if (auto DiffProp = Mat->FindProperty(FbxSurfaceMaterial::sDiffuse); DiffProp.IsValid())
 		{
-			FbxDouble3 DiffuseColor = DiffuseProp.Get<FbxDouble3>();
-			MatInfo.DiffuseColor = FVector(static_cast<float>(DiffuseColor[0]),
-				static_cast<float>(DiffuseColor[1]),
-				static_cast<float>(DiffuseColor[2]));
-			MatInfo.DiffuseTextureFileName = ExtractTexturePath(DiffuseProp);
+			FbxDouble3 Color = DiffProp.Get<FbxDouble3>();
+			Info.DiffuseColor = FVector((float)Color[0], (float)Color[1], (float)Color[2]);
+			Info.DiffuseTextureFileName = ExtractTexturePath(DiffProp);
 		}
 
-		MaterialIDToInfoMap.Add(MaterialID, MatInfo);
+		OutMatMap.Add(MatID, Info);
+		OutInfos.Add(Info);
+	}
+}
+
+// ============================================================================
+// [FBX 변환행렬 → 엔진 Transform]
+// ============================================================================
+FTransform FFbxImporter::ConvertFbxTransform(const FbxAMatrix& InMatrix)
+{
+	using namespace FBXUtil;
+
+	FTransform Result;
+	FbxVector4 T = InMatrix.GetT();
+	FbxQuaternion R = InMatrix.GetQ();
+	FbxVector4 S = InMatrix.GetS();
+
+	Result.Translation = FBXUtil::ConvertPosition(T);
+	Result.Rotation = FQuat(
+		static_cast<float>(R[0]),
+		static_cast<float>(R[1]),
+		static_cast<float>(R[2]),
+		static_cast<float>(R[3]));
+	Result.Scale3D = FVector(static_cast<float>(S[0]), static_cast<float>(S[1]), static_cast<float>(S[2]));
+	return Result;
+}
+
+// ============================================================================
+// [공통 메쉬 추출기] Static / Skeletal 겸용
+// ============================================================================
+template<typename MeshType>
+void ExtractCommonMeshData(
+	FbxMesh* InMesh,
+	MeshType* OutMesh,
+	const TMap<int64, FMaterialInfo>& MatMap,
+	bool bSkeletal,
+	std::function<void(FFlesh&)> OnAfterSection = nullptr 
+)
+{
+	using namespace FBXUtil;
+	if (!InMesh || !OutMesh)
+		return;
+
+	const FbxVector4* ControlPoints = InMesh->GetControlPoints();
+	const int PolygonCount = InMesh->GetPolygonCount();
+
+	TArray<FNormalVertex> Vertices;
+	TArray<uint32> Indices;
+	TMap<int, TArray<int>> MaterialToTriangles;
+	TMap<int, TArray<uint32>> PolyToVertIdx;
+
+	// ----- [정점 데이터] -----
+	for (int PolyIdx = 0; PolyIdx < PolygonCount; ++PolyIdx)
+	{
+		int PolySize = InMesh->GetPolygonSize(PolyIdx);
+		if (PolySize < 3) continue;
+		int NumTri = PolySize - 2;
+
+		for (int TriIdx = 0; TriIdx < NumTri; ++TriIdx)
+		{
+			TArray<uint32> TriVertIdx;
+
+			int V0 = 0, V1 = TriIdx + 1, V2 = TriIdx + 2;
+			for (int LocalVertIdx : { V0, V1, V2 })
+			{
+				int CPIdx = InMesh->GetPolygonVertex(PolyIdx, LocalVertIdx);
+				FNormalVertex V{};
+				V.pos = ConvertPosition(ControlPoints[CPIdx]);
+
+				FbxVector4 Normal;
+				if (InMesh->GetPolygonVertexNormal(PolyIdx, LocalVertIdx, Normal))
+					V.normal = ConvertNormal(Normal);
+
+				// UV
+				FbxStringList UVSets;
+				InMesh->GetUVSetNames(UVSets);
+				if (UVSets.GetCount() > 0)
+				{
+					FbxVector2 UV; bool bUnmapped;
+					if (InMesh->GetPolygonVertexUV(PolyIdx, LocalVertIdx, UVSets[0], UV, bUnmapped))
+						V.tex = FVector2D((float)UV[0], 1.0f - (float)UV[1]);
+				}
+
+				// Tangent
+				V.Tangent = DefaultTangent();
+
+				uint32 Idx = (uint32)Vertices.size();
+				Vertices.Add(V);
+				TriVertIdx.Add(Idx);
+			}
+			PolyToVertIdx.Add(PolyIdx * 100 + TriIdx, TriVertIdx);
+		}
 	}
 
-	// 메시 파싱
-	FbxNode* RootNode = Scene->GetRootNode();
-	if (RootNode)
+	// ----- [머티리얼별 그룹 분할] -----
+	FbxLayerElementMaterial* MatElem = InMesh->GetElementMaterial();
+	if (MatElem)
 	{
-		ProcessMeshNodeAsStatic(RootNode, OutStaticMesh, MaterialIDToInfoMap);
+		for (int PolyIdx = 0; PolyIdx < PolygonCount; ++PolyIdx)
+		{
+			int PolySize = InMesh->GetPolygonSize(PolyIdx);
+			if (PolySize < 3) continue;
+			int MatIndex = 0;
+
+			if (MatElem->GetMappingMode() == FbxLayerElement::eByPolygon)
+			{
+				if (MatElem->GetReferenceMode() == FbxLayerElement::eIndexToDirect)
+					MatIndex = MatElem->GetIndexArray().GetAt(PolyIdx);
+			}
+
+			if (!MaterialToTriangles.Contains(MatIndex))
+				MaterialToTriangles.Add(MatIndex, TArray<int>());
+
+			for (int TriIdx = 0; TriIdx < PolySize - 2; ++TriIdx)
+				MaterialToTriangles[MatIndex].Add(PolyIdx * 100 + TriIdx);
+		}
+	}
+
+	// ----- [섹션 생성] -----
+	uint32 BaseVertexOffset = (uint32)OutMesh->Vertices.size();
+	uint32 BaseIndexOffset = (uint32)OutMesh->Indices.size();
+	uint32 CurStartIndex = BaseIndexOffset;
+
+	TArray<int> SortedMatIndices;
+	for (auto& P : MaterialToTriangles) SortedMatIndices.Add(P.first);
+	SortedMatIndices.Sort();
+
+	for (int MatIndex : SortedMatIndices)
+	{
+		FFlesh Section;
+		Section.StartIndex = CurStartIndex;
+		Section.IndexCount = 0;
+
+		for (int Key : MaterialToTriangles[MatIndex])
+		{
+			const auto* Arr = PolyToVertIdx.Find(Key);
+			if (!Arr) continue;
+			OutMesh->Indices.insert(OutMesh->Indices.end(), {
+				(*Arr)[0] + BaseVertexOffset,
+				(*Arr)[1] + BaseVertexOffset,
+				(*Arr)[2] + BaseVertexOffset
+				});
+			Section.IndexCount += 3;
+		}
+
+		// 머티리얼 이름
+		if (MatIndex < InMesh->GetNode()->GetMaterialCount())
+		{
+			FbxSurfaceMaterial* Mat = InMesh->GetNode()->GetMaterial(MatIndex);
+			if (Mat)
+			{
+				int64 MatID = Mat->GetUniqueID();
+				if (const auto* Found = MatMap.Find(MatID))
+					Section.InitialMaterialName = Found->MaterialName;
+				else
+					Section.InitialMaterialName = Mat->GetName();
+			}
+		}
+		else Section.InitialMaterialName = "DefaultMaterial";
+
+		if (OnAfterSection) OnAfterSection(Section); // 스킨 처리용 콜백
+		if constexpr (std::is_same_v<MeshType, FStaticMesh>)
+			OutMesh->GroupInfos.Add((FGroupInfo&)Section);
+		else
+			OutMesh->Fleshes.Add(Section);
+
+		CurStartIndex += Section.IndexCount;
+	}
+
+	OutMesh->Vertices.insert(OutMesh->Vertices.end(), Vertices.begin(), Vertices.end());
+	OutMesh->bHasMaterial |= (InMesh->GetElementMaterialCount() > 0);
+}
+
+// ============================================================================
+// [FBX 본 스키닝 정보 추출]
+// ============================================================================
+void FFbxImporter::ExtractSkinningData(FbxMesh* InMesh, FFlesh& OutFlesh, const TMap<FString, UBone*>& BoneMap)
+{
+	int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
+	if (SkinCount == 0) return;
+
+	FbxSkin* Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
+	int ClusterCount = Skin->GetClusterCount();
+
+	for (int i = 0; i < ClusterCount; ++i)
+	{
+		FbxCluster* Cl = Skin->GetCluster(i);
+		if (!Cl || !Cl->GetLink()) continue;
+
+		FString BoneName(Cl->GetLink()->GetName());
+		if (auto* Found = BoneMap.Find(BoneName))
+		{
+			OutFlesh.Bones.Add(*Found);
+			double* W = Cl->GetControlPointWeights();
+			int Cnt = Cl->GetControlPointIndicesCount();
+
+			float Avg = 0.0f;
+			for (int j = 0; j < Cnt; ++j) Avg += (float)W[j];
+			OutFlesh.Weights.Add(Cnt > 0 ? Avg / Cnt : 0.f);
+		}
+	}
+}
+
+// ============================================================================
+// [FBX StaticMesh 로드]
+// ============================================================================
+bool FFbxImporter::BuildStaticMeshFromPath(const FString& Path, FStaticMesh* OutStatic, TArray<FMaterialInfo>& OutMats)
+{
+	if (!OutStatic) return false;
+	FbxScene* Scene = ImportFbxScene(Path);
+	if (!Scene) return false;
+
+	TMap<int64, FMaterialInfo> MatMap;
+	CollectMaterials(Scene, Path, MatMap, OutMats);
+
+	FbxNode* Root = Scene->GetRootNode();
+	if (Root)
+	{
+		ProcessMeshNodeAsStatic(Root, OutStatic, MatMap);
 	}
 
 	Scene->Destroy();
-
-	// 머티리얼 목록 복사
-	OutMaterialInfos.clear();
-	OutMaterialInfos.reserve(MaterialIDToInfoMap.size());
-	for (auto& Pair : MaterialIDToInfoMap)
-	{
-		OutMaterialInfos.Add(Pair.second);
-	}
 	return true;
+}
+
+// ============================================================================
+// [FBX Mesh 처리 - 스태틱용]
+// ============================================================================
+void FFbxImporter::ProcessMeshNodeAsStatic(FbxNode* Node, FStaticMesh* OutMesh, const TMap<int64, FMaterialInfo>& MatMap)
+{
+	if (!Node || !OutMesh) return;
+	if (auto* Attr = Node->GetNodeAttribute())
+	{
+		if (Attr->GetAttributeType() == FbxNodeAttribute::eMesh)
+		{
+			ExtractCommonMeshData(Node->GetMesh(), OutMesh, MatMap, false);
+		}
+	}
+	for (int i = 0; i < Node->GetChildCount(); ++i)
+		ProcessMeshNodeAsStatic(Node->GetChild(i), OutMesh, MatMap);
+}
+
+// ============================================================================
+// [FBX Skeleton Root 찾기 및 계층 생성]
+// ============================================================================
+UBone* FFbxImporter::FindSkeletonRootAndBuild(FbxNode* RootNode)
+{
+	if (!RootNode)
+		return nullptr;
+
+	// 내부 재귀 람다 (DFS 방식)
+	std::function<UBone*(FbxNode*)> FindRecursively = [&](FbxNode* Node) -> UBone*
+	{
+		if (!Node)
+			return nullptr;
+
+		// 현재 노드가 Skeleton이면 바로 처리
+		if (auto* Attr = Node->GetNodeAttribute())
+		{
+			if (Attr->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+			{
+				UE_LOG("Found skeleton root: %s", Node->GetName());
+				return ProcessSkeletonNode(Node);
+			}
+		}
+
+		// 자식 노드 순회 (깊이 우선 탐색)
+		for (int i = 0; i < Node->GetChildCount(); ++i)
+		{
+			if (UBone* Found = FindRecursively(Node->GetChild(i)))
+				return Found; // 첫 번째 스켈레톤 발견 시 반환
+		}
+
+		return nullptr;
+	};
+
+	return FindRecursively(RootNode);
+}
+
+
+// ============================================================================
+// [FBX Skeleton 노드 재귀 생성]
+// ============================================================================
+UBone* FFbxImporter::ProcessSkeletonNode(FbxNode* InNode, UBone* InParent)
+{
+	if (!InNode)
+		return nullptr;
+
+	FbxAMatrix LocalTransform = InNode->EvaluateLocalTransform();
+	FTransform BoneTransform = ConvertFbxTransform(LocalTransform);
+
+	FName BoneName(InNode->GetName());
+	UBone* NewBone = new UBone(BoneName, BoneTransform);
+	ObjectFactory::AddToGUObjectArray(UBone::StaticClass(), NewBone);
+	NewBone->SetRelativeBindPoseTransform(BoneTransform);
+
+	if (InParent)
+	{
+		InParent->AddChild(NewBone);
+		NewBone->SetParent(InParent);
+	}
+
+	for (int i = 0; i < InNode->GetChildCount(); i++)
+	{
+		FbxNode* ChildNode = InNode->GetChild(i);
+		FbxNodeAttribute* Attr = ChildNode->GetNodeAttribute();
+		if (Attr && Attr->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+		{
+			ProcessSkeletonNode(ChildNode, NewBone);
+		}
+	}
+
+	return NewBone;
+}
+
+// ============================================================================
+// [FBX Mesh 처리 - 스켈레탈용]
+// ============================================================================
+void FFbxImporter::ProcessMeshNode(
+	FbxNode* InNode,
+	FSkeletalMesh* OutSkeletalMesh,
+	const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap)
+{
+	if (!InNode || !OutSkeletalMesh)
+		return;
+
+	FbxNodeAttribute* Attr = InNode->GetNodeAttribute();
+	if (Attr && Attr->GetAttributeType() == FbxNodeAttribute::eMesh)
+	{
+		FbxMesh* Mesh = InNode->GetMesh();
+		if (Mesh)
+		{
+			// 기존과 동일: BoneMap을 지역으로 구성
+			TMap<FString, UBone*> BoneMap;
+			if (OutSkeletalMesh->Skeleton)
+			{
+				OutSkeletalMesh->Skeleton->ForEachBone([&BoneMap](UBone* Bone)
+					{
+						if (Bone)
+						{
+							FString BoneName = Bone->GetName().ToString();
+							BoneMap.Add(BoneName, Bone);
+						}
+					});
+			}
+
+			// 공통 메시 데이터 추출 (스켈레탈 모드 true)
+			ExtractCommonMeshData(Mesh, OutSkeletalMesh, MaterialIDToInfoMap, true,
+				[&](FFlesh& FleshSection)
+				{
+					//  원래 코드와 동일한 방식으로 스킨 데이터 추출
+					ExtractSkinningData(Mesh, FleshSection, BoneMap);
+				});
+		}
+	}
+	//  자식 노드 재귀 처리
+	const int ChildCount = InNode->GetChildCount();
+	for (int i = 0; i < ChildCount; ++i)
+	{
+		ProcessMeshNode(InNode->GetChild(i), OutSkeletalMesh, MaterialIDToInfoMap);
+	}
 }

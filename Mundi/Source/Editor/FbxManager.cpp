@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FbxManager.h"
 #include "FbxDebugLog.h"
 #include "Bone.h"
@@ -222,10 +222,10 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 	if (!Scene)
 		return nullptr;
 
-	// 머티리얼 정보 추출
+	// 머티리얼 정보 추출 (함수명 및 인자 순서 수정됨)
 	TMap<int64, FMaterialInfo> MaterialMap;
 	TArray<FMaterialInfo> MaterialInfos;
-	ImporterUtil->CollectMaterials(Scene, MaterialMap, MaterialInfos, NormalizedPathStr);
+	ImporterUtil->CollectMaterials(Scene, NormalizedPathStr, MaterialMap, MaterialInfos);
 
 	// 루트 노드 확인
 	FbxNode* RootNode = Scene->GetRootNode();
@@ -264,6 +264,7 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 	Scene->Destroy();
 	return SkeletalMesh;
 }
+
 
 // =============================================================
 // BuildStaticMeshFromScene()
@@ -446,3 +447,4 @@ FStaticMesh* FFbxManager::LoadFbxStaticMeshAsset(const FString& PathFileName)
 
 	return NewStaticMesh;
 }
+
