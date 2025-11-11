@@ -144,7 +144,7 @@ void USkinnedMeshComponent::CollectMeshBatches(
         }
         FMatrix SkinningMatrix = BoneOffSet.GetModelingMatrix();
         
-        BatchElement.WorldMatrix = GetWorldMatrix();// *SkinningMatrix;
+        BatchElement.WorldMatrix = GetWorldMatrix() * SkinningMatrix;
         BatchElement.ObjectID = InternalIndex;
         BatchElement.PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 

@@ -987,6 +987,38 @@ struct alignas(16) FMatrix
 		return !(*this == Other);
 	}
 
+	FMatrix operator*(const float Scalar) const
+	{
+		FMatrix Output = *this;
+		for (int32 i = 0; i < 4; i++)
+		{
+			for (int32 j = 0; j < 4; j++)
+			{
+				Output.M[i][j] = M[i][j] * Scalar;
+			}
+		}
+		return Output;
+	}
+
+	FMatrix operator+(const FMatrix& Other) const
+	{
+		FMatrix Output = *this;
+		for (int32 i = 0; i < 4; i++)
+		{
+			for (int32 j = 0; j < 4; j++)
+			{
+				Output.M[i][j] = M[i][j] + Other.M[i][j];
+			}
+		}
+		return Output;
+	}
+
+	FMatrix& operator+=(const FMatrix& Other)
+	{
+		*this = *this + Other;
+		return *this;
+	}
+
 	// View/Proj (L H)
 	static FMatrix LookAtLH(const FVector& Eye, const FVector& At, const FVector& Up);
 	static FMatrix PerspectiveFovLH(float FovY, float Aspect, float Zn, float Zf);
