@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FbxManager.h"
 #include "FbxDebugLog.h"
 #include "Bone.h"
@@ -447,3 +447,4 @@ FStaticMesh* FFbxManager::LoadFbxStaticMeshAsset(const FString& PathFileName)
 
 	return NewStaticMesh;
 }
+

@@ -32,15 +32,15 @@ FbxScene* FFbxImporter::ImportFbxScene(const FString& Path)
 	Importer->Destroy();
 
 	FbxAxisSystem SourceAxis = Scene->GetGlobalSettings().GetAxisSystem();
-	const FbxAxisSystem::ECoordSystem TargetCoordSystem = FbxAxisSystem::eRightHanded;
-	const FbxAxisSystem::EUpVector TargetUp = FbxAxisSystem::eZAxis;
-	const FbxAxisSystem::EFrontVector TargetFront = FbxAxisSystem::eParityOdd; // +X Forward
-	FbxAxisSystem TargetAxis(TargetUp, TargetFront, TargetCoordSystem);
+	FbxAxisSystem::ECoordSystem CoordSystem = FbxAxisSystem::eLeftHanded;
+	FbxAxisSystem::EUpVector UpVector = FbxAxisSystem::eZAxis;
+	FbxAxisSystem::EFrontVector FrontVector = FbxAxisSystem::eParityEven;
+	FbxAxisSystem TargetAxis(UpVector, FrontVector, CoordSystem);
 	if (SourceAxis != TargetAxis)
 	{
-		UE_LOG("FFbxImporter: Converting scene axis to Z-Up / +X Forward / RH.");
 		FbxRootNodeUtility::RemoveAllFbxRoots(Scene);
-		TargetAxis.ConvertScene(Scene);
+		TargetAxis.DeepConvertScene(Scene);
+		Scene->GetGlobalSettings().SetAxisSystem(TargetAxis);
 	}
 
 	return Scene;
@@ -105,8 +105,12 @@ FTransform FFbxImporter::ConvertFbxTransform(const FbxAMatrix& InMatrix)
 	FbxQuaternion R = InMatrix.GetQ();
 	FbxVector4 S = InMatrix.GetS();
 
-	Result.Translation = ConvertPosition(T);
-	Result.Rotation = FBXUtil::ConvertRotation(R);
+	Result.Translation = FBXUtil::ConvertPosition(T);
+	Result.Rotation = FQuat(
+		static_cast<float>(R[0]),
+		static_cast<float>(R[1]),
+		static_cast<float>(R[2]),
+		static_cast<float>(R[3]));
 	Result.Scale3D = FVector(static_cast<float>(S[0]), static_cast<float>(S[1]), static_cast<float>(S[2]));
 	return Result;
 }
