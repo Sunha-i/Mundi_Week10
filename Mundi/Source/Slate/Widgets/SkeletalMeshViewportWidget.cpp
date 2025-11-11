@@ -18,7 +18,7 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 {
 	WorldForPreviewManager.CreateWorldForPreviewScene();
 	WorldForPreviewManager.SetDirectionalLight(
-		{30.f, 0.f, 30.f}
+		{0.f, 90.f, 0.f}
 	);
 
 	// ViewportClient 생성 (내부적으로 Camera 생성)
@@ -31,8 +31,8 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 	ACameraActor* Camera = Viewport.GetViewportClient()->GetCamera();
 	if (Camera)
 	{
-		Camera->SetActorLocation({-5.f, 0.f, 3.f});
-		Camera->SetRotationFromEulerAngles(FVector::Zero());
+		Camera->SetActorLocation({0.f, -70.f, 200.f});
+		Camera->SetRotationFromEulerAngles({0.f, 90.f, -90.f});
 		WorldForPreviewManager.SetCamera(Camera);
 	}
 
