@@ -44,6 +44,8 @@ struct FName
     bool operator==(const FName& Other) const { return ComparisonIndex == Other.ComparisonIndex; }
     FString ToString() const { return FNamePool::Get(DisplayIndex).Display; }
 
+    bool Empty() const { return ToString().empty(); }
+    
     friend FName operator+(const FName& A, const FName& B)
     {
         return FName(A.ToString() + B.ToString());
