@@ -364,8 +364,6 @@ ID3D11Texture2D* FViewportClient::DrawToTexture(FViewport* Viewport)
 	uint32 ViewportWidth = Viewport->GetSizeX();
 	uint32 ViewportHeight = Viewport->GetSizeY();
 
-	UE_LOG("[DrawToTexture] Starting render for Preview World at resolution: %dx%d", ViewportWidth, ViewportHeight);
-
 	// FSceneView 생성 (Viewport 정보 활용)
 	FSceneView PreviewView(
 		CameraComponent,
@@ -376,11 +374,6 @@ ID3D11Texture2D* FViewportClient::DrawToTexture(FViewport* Viewport)
 	// Preview World 렌더링 (지정된 해상도의 텍스처에 렌더링하고 반환)
 	FSceneRenderer PreviewRenderer(World, &PreviewView, Renderer);
 	ID3D11Texture2D* Result = PreviewRenderer.RenderToTexture(ViewportWidth, ViewportHeight);
-
-	if (Result)
-		UE_LOG("[DrawToTexture] Render successful, texture returned");
-	else
-		UE_LOG("[DrawToTexture] Render failed, null texture returned");
 
 	// 주의: 반환된 텍스처는 호출자가 사용 후 Release해야 함
 	return Result;

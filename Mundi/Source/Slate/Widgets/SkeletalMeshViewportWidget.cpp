@@ -84,32 +84,13 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	if (MeshComp)
 	{
 		MeshComp->SetSkeletalMesh(TargetMeshName.ToString());
-		UE_LOG("[SkeletalMeshViewportWidget] SkeletalMeshComponent mesh set");
 	}
 	else
 	{
 		UE_LOG("[SkeletalMeshViewportWidget] Error: SkeletalMeshComponent is null");
 	}
 
-	// World에 Actor 추가 (자동으로 RegisterAllComponents 호출됨)
 	WorldForPreviewManager.SetActor(SkeletalMeshActor);
-
-	// 디버그: Actor와 Component 상태 확인
-	UE_LOG("[SkeletalMeshViewportWidget] Preview World has %d actors", PreviewWorld->GetActors().size());
-
-	for (AActor* Actor : PreviewWorld->GetActors())
-	{
-		UE_LOG("[SkeletalMeshViewportWidget] Actor: %s, Components: %d",
-			Actor->GetName().c_str(),
-			Actor->GetOwnedComponents().size());
-
-		for (UActorComponent* Comp : Actor->GetOwnedComponents())
-		{
-			UE_LOG("[SkeletalMeshViewportWidget]   - Component: %s, Registered: %s",
-				Comp->GetName().c_str(),
-				Comp->IsRegistered() ? "YES" : "NO");
-		}
-	}
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -162,33 +143,24 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		ImGui::Separator();
 
 		// 디버그 정보 표시
-		ImGui::Text("Debug Info:");
-		ImGui::Text("- PreviewSRV: %s", PreviewSRV ? "OK" : "NULL");
-		ImGui::Text("- PreviewTexture: %s", PreviewTexture ? "OK" : "NULL");
+		// ImGui::Text("Debug Info:");
+		// ImGui::Text("- PreviewSRV: %s", PreviewSRV ? "OK" : "NULL");
+		// ImGui::Text("- PreviewTexture: %s", PreviewTexture ? "OK" : "NULL");
 
 		FViewportClient* ViewportClient = Viewport.GetViewportClient();
 		ID3D11Texture2D* RenderedTexture = nullptr;
 
-		ImGui::Text("- ViewportClient: %s", ViewportClient ? "OK" : "NULL");
+		// ImGui::Text("- ViewportClient: %s", ViewportClient ? "OK" : "NULL");
 
-		if (ViewportClient)
-		{
-			// DrawToTexture는 임시 텍스처를 생성하고 반환함 (사용 후 Release 필요)
-			RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
-			ImGui::Text("- RenderedTexture: %s", RenderedTexture ? "OK" : "NULL");
-		}
+		RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
 
 		D3D11RHI* RHI = URenderManager::GetInstance().GetRenderer()->GetRHIDevice();
-		ImGui::Text("- RHI: %s", RHI ? "OK" : "NULL");
-		ImGui::Separator();
 
 		// 조건 체크 상세
 		bool bAllValid = PreviewSRV && RenderedTexture && PreviewTexture && RHI;
-		ImGui::Text("All conditions valid: %s", bAllValid ? "YES" : "NO");
 
 		if (bAllValid)
 		{
-			UE_LOG("[RenderViewportPanel] Copying and displaying texture");
 			RHI->CopyTexture(PreviewTexture, RenderedTexture);
 
 			// ImGui에 PreviewSRV 표시 (고정 크기)
@@ -197,7 +169,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 				static_cast<float>(PreviewTextureHeight)
 			);
 			ImGui::Image((void*)PreviewSRV, PreviewImageSize);
-			ImGui::Text("Image displayed");
 		}
 		else
 		{
