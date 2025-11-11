@@ -50,6 +50,7 @@ public:
     void SetViewMode(EViewMode InViewModeIndex) { ViewMode = InViewModeIndex; }
 
     EViewMode GetViewMode() { return ViewMode;}
+    void SetIsImGuiClient(bool bInIsImGui) { bIsImGuiClient = bInIsImGui; }
 
 protected:
     EViewportType ViewportType = EViewportType::Perspective;
@@ -74,4 +75,7 @@ protected:
     FVector PerspectiveCameraPosition = FVector(-5.0f, 5.0f, 5.0f);
     FVector PerspectiveCameraRotation = FVector(0.0f, 22.5f, -45.0f);
     float PerspectiveCameraFov=60;
+
+    // ImGui 클라이언트 여부 
+    bool bIsImGuiClient = false;
 };

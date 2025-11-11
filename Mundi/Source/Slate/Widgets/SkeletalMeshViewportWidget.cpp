@@ -20,23 +20,22 @@ IMPLEMENT_CLASS(USkeletalMeshViewportWidget)
 USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 {
 	WorldForPreviewManager.CreateWorldForPreviewScene();
-	WorldForPreviewManager.SetDirectionalLight(
-		{0.f, 90.f, 0.f}
-	);
+	WorldForPreviewManager.SetDirectionalLight({ 135.f, 135.f, 0.f });
 
 	// ViewportClient 생성 (내부적으로 Camera 생성)
 	Viewport.SetViewportClient(new FViewportClient());
+	Viewport.GetViewportClient()->SetIsImGuiClient(true);
 	Viewport.GetViewportClient()->SetWorld(
 		WorldForPreviewManager.GetWorldForPreview()
 	);
 
 	// ViewportClient의 Camera를 PreviewScene에 등록
-	ACameraActor* Camera = Viewport.GetViewportClient()->GetCamera();
-	if (Camera)
+	PreviewCamera = Viewport.GetViewportClient()->GetCamera();
+	if (PreviewCamera)
 	{
-		Camera->SetActorLocation({0.f, -70.f, 200.f});
-		Camera->SetRotationFromEulerAngles({0.f, 90.f, -90.f});
-		WorldForPreviewManager.SetCamera(Camera);
+		PreviewCamera->SetActorLocation({ 2.f, 0.f, 1.f });
+		PreviewCamera->SetRotationFromEulerAngles({ 0.f, 0.f, 180.f });
+		WorldForPreviewManager.SetCamera(PreviewCamera);
 	}
 
 	Viewport.Resize(
@@ -269,22 +268,16 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 			if (ImGui::IsItemHovered())
 			{
-				ImVec2 MousePos = ImGui::GetMousePos();
-				ImVec2 ImagePos = ImGui::GetItemRectMin();
-				int LocalX = static_cast<int>(MousePos.x - ImagePos.x);
-				int LocalY = static_cast<int>(MousePos.y - ImagePos.y);
-
-				ViewportClient->MouseMove(&Viewport, LocalX, LocalY);
-
-				for (int i = 0; i < 3; ++i)    // Left click(0), Right click(1), Wheel click(2)
+				// Camera rotation by mouse
+				if (ImGui::IsMouseDown(1))	// 1: MouseRight
 				{
-					if (ImGui::IsMouseDown(i) && ImGui::IsItemClicked(i))
+					ImVec2 MouseDelta = ImGui::GetIO().MouseDelta;
+					if (MouseDelta.x != 0.0f || MouseDelta.y != 0.0f)
 					{
-						ViewportClient->MouseButtonDown(&Viewport, LocalX, LocalY, i);
-					}
-					else if (ImGui::IsMouseReleased(i))
-					{
-						ViewportClient->MouseButtonUp(&Viewport, LocalX, LocalY, i);
+						if (PreviewCamera)
+						{
+							PreviewCamera->ApplyRotationInput(FVector2D(MouseDelta.x, MouseDelta.y));
+						}
 					}
 				}
 			}

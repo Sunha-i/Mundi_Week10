@@ -57,6 +57,7 @@ public:
     void SetCameraSpeed(float InSpeed) { CameraMoveSpeed = InSpeed; EditorINI["CameraSpeed"] = std::to_string(CameraMoveSpeed); }
 
     void ProcessEditorCameraInput(float DeltaSeconds);
+    void ApplyRotationInput(const FVector2D& InMouseDelta);
 
     // ───── 직렬화 관련 ────────────────────────────
     void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
@@ -77,7 +78,6 @@ private:
 
     bool PerspectiveCameraInput = false;
     
-
     // Camera input processing methods
     void ProcessCameraRotation(float DeltaSeconds);
     void ProcessCameraMovement(float DeltaSeconds);

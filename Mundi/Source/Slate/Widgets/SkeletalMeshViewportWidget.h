@@ -38,6 +38,9 @@ private:
 	inline const static uint32 DEFAULT_VIEWPORT_WIDTH = 512;
 	inline const static uint32 DEFAULT_VIEWPORT_HEIGHT = 512;
 
+	// PreviewScene의 카메라
+	ACameraActor* PreviewCamera;
+
 	// Preview용 독립 RenderTarget
 	ID3D11Texture2D* PreviewTexture = nullptr;
 	ID3D11ShaderResourceView* PreviewSRV = nullptr;
