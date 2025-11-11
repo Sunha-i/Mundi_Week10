@@ -14,7 +14,6 @@ public:
 
 	void SetSkeletalMeshToViewport(const FName& InTargetMeshName);
 
-	void Update() override;
 	void RenderWidget() override;
 
 private:

@@ -24,7 +24,6 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 
 	// ViewportClient 생성 (내부적으로 Camera 생성)
 	Viewport.SetViewportClient(new FViewportClient());
-	Viewport.GetViewportClient()->SetIsImGuiClient(true);
 	Viewport.GetViewportClient()->SetWorld(
 		WorldForPreviewManager.GetWorldForPreview()
 	);
@@ -93,22 +92,6 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	}
 
 	WorldForPreviewManager.SetActor(SkeletalMeshActor);
-}
-
-void USkeletalMeshViewportWidget::Update()
-{
-	const float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
-	FViewportClient* Client = Viewport.GetViewportClient();
-	if (Client)
-	{
-		Client->Tick(DeltaSeconds);
-	}
-
-	UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview();
-	if (PreviewWorld)
-	{
-		PreviewWorld->Tick(DeltaSeconds);
-	}
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -268,15 +251,43 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 			if (ImGui::IsItemHovered())
 			{
-				// Camera rotation by mouse
-				if (ImGui::IsMouseDown(1))	// 1: MouseRight
+				if (ImGui::IsMouseDown(1))	// 1: MouseRight (Only process RT)
 				{
+					// Camera rotation
 					ImVec2 MouseDelta = ImGui::GetIO().MouseDelta;
 					if (MouseDelta.x != 0.0f || MouseDelta.y != 0.0f)
 					{
 						if (PreviewCamera)
 						{
 							PreviewCamera->ApplyRotationInput(FVector2D(MouseDelta.x, MouseDelta.y));
+						}
+					}
+
+					// Camera movement
+					FVector MoveDirection = FVector::Zero();
+					if (ImGui::IsKeyDown(ImGuiKey_W)) MoveDirection.X += 1.0f;
+					if (ImGui::IsKeyDown(ImGuiKey_S)) MoveDirection.X -= 1.0f;
+					if (ImGui::IsKeyDown(ImGuiKey_D)) MoveDirection.Y += 1.0f;
+					if (ImGui::IsKeyDown(ImGuiKey_A)) MoveDirection.Y -= 1.0f;
+					if (ImGui::IsKeyDown(ImGuiKey_E)) MoveDirection.Z += 1.0f;
+					if (ImGui::IsKeyDown(ImGuiKey_Q)) MoveDirection.Z -= 1.0f;
+					if (!MoveDirection.IsZero())
+					{
+						if (PreviewCamera)
+						{
+							float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+							PreviewCamera->ApplyMovementInput(MoveDirection, DeltaSeconds);
+						}
+					}
+
+					// Camera zoom
+					float wheel = ImGui::GetIO().MouseWheel;
+					if (wheel != 0.0f)
+					{
+						if (PreviewCamera)
+						{
+							float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+							PreviewCamera->ApplyZoomInput(wheel, DeltaSeconds);
 						}
 					}
 				}

@@ -58,6 +58,8 @@ public:
 
     void ProcessEditorCameraInput(float DeltaSeconds);
     void ApplyRotationInput(const FVector2D& InMouseDelta);
+    void ApplyMovementInput(const FVector& InMoveDirection, float InDeltaSeconds);
+    void ApplyZoomInput(float WheelDelta, float DeltaSeconds);
 
     // ───── 직렬화 관련 ────────────────────────────
     void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
@@ -81,5 +83,6 @@ private:
     // Camera input processing methods
     void ProcessCameraRotation(float DeltaSeconds);
     void ProcessCameraMovement(float DeltaSeconds);
+    void ProcessCameraZoom(float DeltaSeconds);
 };
 

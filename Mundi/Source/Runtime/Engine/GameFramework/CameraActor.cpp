@@ -188,6 +188,7 @@ void ACameraActor::ProcessEditorCameraInput(float DeltaSeconds)
         ProcessCameraRotation(DeltaSeconds);
         ProcessCameraMovement(DeltaSeconds);
     }
+    ProcessCameraZoom(DeltaSeconds);
 }
 
 void ACameraActor::Serialize(const bool bInIsLoading, JSON& InOutHandle)
@@ -255,32 +256,25 @@ void ACameraActor::ProcessCameraMovement(float DeltaSeconds)
 {
     UInputManager& InputManager = UInputManager::GetInstance();
     
-    FVector Move(0, 0, 0);
+    FVector MoveDirection = FVector::Zero();
 
-    // 1) 카메라 회전(쿼터니언)에서 로컬 기저 추출 (스케일 영향 제거)
-    const FQuat Quat = GetActorRotation(); // (x,y,z,w)
-    // DirectX LH 기준: Right=+X, Up=+Y, Forward=+Z
-    const FVector Right = Quat.RotateVector(FVector(0, 1, 0)).GetNormalized();
-    const FVector Up = Quat.RotateVector(FVector(0, 0, 1)).GetNormalized();
-    const FVector Forward = Quat.RotateVector(FVector(1, 0, 0)).GetNormalized();
+    // 입력 누적 (WASD + QE)
+    if (InputManager.IsKeyDown('W')) MoveDirection.X += 1.0f;
+    if (InputManager.IsKeyDown('S')) MoveDirection.X -= 1.0f;
+    if (InputManager.IsKeyDown('D')) MoveDirection.Y += 1.0f;
+    if (InputManager.IsKeyDown('A')) MoveDirection.Y -= 1.0f;
+    if (InputManager.IsKeyDown('E')) MoveDirection.Z += 1.0f;
+    if (InputManager.IsKeyDown('Q')) MoveDirection.Z -= 1.0f;
 
-    // 2) 입력 누적 (WASD + QE)
-    if (InputManager.IsKeyDown('W')) Move += Forward;
-    if (InputManager.IsKeyDown('S')) Move -= Forward;
-    if (InputManager.IsKeyDown('D')) Move += Right;
-    if (InputManager.IsKeyDown('A')) Move -= Right;
-    if (InputManager.IsKeyDown('E')) Move += Up;
-    if (InputManager.IsKeyDown('Q')) Move -= Up; 
+    ApplyMovementInput(MoveDirection, DeltaSeconds);
+}
 
-    // 3) 이동 적용
-    if (Move.SizeSquared() > 0.0f)
-    {
-        const float speed = CameraMoveSpeed * DeltaSeconds * 2.5f;
-        Move = Move.GetNormalized() * speed;
+void ACameraActor::ProcessCameraZoom(float DeltaSeconds)
+{
+    UInputManager& InputManager = UInputManager::GetInstance();
+    float WheelDelta = InputManager.GetMouseWheelDelta();
 
-        const FVector P = GetActorLocation();
-        SetActorLocation(P + Move);
-    }
+    ApplyZoomInput(WheelDelta, DeltaSeconds);
 }
 
 void ACameraActor::ApplyRotationInput(const FVector2D& InMouseDelta)
@@ -313,4 +307,39 @@ void ACameraActor::ApplyRotationInput(const FVector2D& InMouseDelta)
 
     // 3) UIManager에 마우스로 변경된 Pitch/Yaw 값 동기화
     UIManager.UpdateMouseRotation(CameraPitchDeg, CameraYawDeg);
+}
+
+void ACameraActor::ApplyMovementInput(const FVector& InMoveDirection, float InDeltaSeconds)
+{
+    if (InMoveDirection.IsZero())   return;
+
+    // 1) 카메라 회전(쿼터니언)에서 로컬 기저 추출 (스케일 영향 제거)
+    const FQuat Quat = GetActorRotation(); // (x,y,z,w)
+    // DirectX LH 기준: Right=+X, Up=+Y, Forward=+Z
+    const FVector Right = Quat.RotateVector(FVector(0, 1, 0)).GetNormalized();
+    const FVector Up = Quat.RotateVector(FVector(0, 0, 1)).GetNormalized();
+    const FVector Forward = Quat.RotateVector(FVector(1, 0, 0)).GetNormalized();
+
+    FVector WorldSpaceMove =
+        Forward * InMoveDirection.X +
+        Right   * InMoveDirection.Y +
+        Up      * InMoveDirection.Z;
+
+    // 3) 이동 적용
+    const float speed = CameraMoveSpeed * InDeltaSeconds * 2.5f;
+    WorldSpaceMove = WorldSpaceMove.GetNormalized() * speed;
+
+    const FVector P = GetActorLocation();
+    SetActorLocation(P + WorldSpaceMove);
+}
+
+void ACameraActor::ApplyZoomInput(float WheelDelta, float DeltaSeconds)
+{
+    const float ZoomSpeed = CameraMoveSpeed;
+
+    const FVector Forward = GetForward();
+    const float MovementAmount = WheelDelta * ZoomSpeed * DeltaSeconds * 5.0f;
+
+    const FVector CurrentLocation = GetActorLocation();
+    SetActorLocation(CurrentLocation + Forward * MovementAmount);
 }
