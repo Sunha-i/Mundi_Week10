@@ -326,7 +326,7 @@ void ACameraActor::ApplyMovementInput(const FVector& InMoveDirection, float InDe
         Up      * InMoveDirection.Z;
 
     // 3) 이동 적용
-    const float speed = CameraMoveSpeed * InDeltaSeconds * 2.5f;
+    const float speed = CameraMoveSpeed * InDeltaSeconds * 2.0f;
     WorldSpaceMove = WorldSpaceMove.GetNormalized() * speed;
 
     const FVector P = GetActorLocation();

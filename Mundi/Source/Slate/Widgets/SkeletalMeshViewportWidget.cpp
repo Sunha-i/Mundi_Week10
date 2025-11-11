@@ -36,10 +36,9 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 		PreviewCamera->SetRotationFromEulerAngles({ 0.f, 0.f, 180.f });
 		WorldForPreviewManager.SetCamera(PreviewCamera);
 	}
+	bIsDraggingViewport = false;
 
-	Viewport.Resize(
-		0,
-		0,
+	Viewport.Resize(0, 0,
 		DEFAULT_VIEWPORT_WIDTH,
 		DEFAULT_VIEWPORT_HEIGHT
 	);
@@ -249,46 +248,60 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 			);
 			ImGui::Image((void*)PreviewSRV, PreviewImageSize);
 
+			// 1) 드래그 시작 조건: ImGui::Image 위에서 우클릭을 시작했을 때
+			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1))		// 1: MouseRight (Only process RT)
+			{
+				bIsDraggingViewport = true;
+			}
+
+			// 2) 드래그 종료 조건: 마우스 우클릭 버튼을 (어디서든) 뗐을 때
+			if (ImGui::IsMouseReleased(1))
+			{
+				bIsDraggingViewport = false;
+			}
+
+			// 3) 드래그 진행: bIsDraggingViewport가 true일 때만 회전/이동 처리
+			if (bIsDraggingViewport)
+			{
+				// Camera rotation
+				ImVec2 MouseDelta = ImGui::GetIO().MouseDelta;
+				if (MouseDelta.x != 0.0f || MouseDelta.y != 0.0f)
+				{
+					if (PreviewCamera)
+					{
+						PreviewCamera->ApplyRotationInput(FVector2D(MouseDelta.x, MouseDelta.y));
+					}
+				}
+
+				// Camera movement
+				FVector MoveDirection = FVector::Zero();
+				if (ImGui::IsKeyDown(ImGuiKey_W)) MoveDirection.X += 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_S)) MoveDirection.X -= 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_D)) MoveDirection.Y += 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_A)) MoveDirection.Y -= 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_E)) MoveDirection.Z += 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_Q)) MoveDirection.Z -= 1.0f;
+				if (!MoveDirection.IsZero())
+				{
+					if (PreviewCamera)
+					{
+						float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+						PreviewCamera->ApplyMovementInput(MoveDirection, DeltaSeconds);
+					}
+				}
+			}
+
+			// 4) 줌 처리: 드래그 상태와 상관없이, ImGui::Image 호버 시에만 처리
 			if (ImGui::IsItemHovered())
 			{
-				if (ImGui::IsMouseDown(1))	// 1: MouseRight (Only process RT)
+				// Camera zoom
+				float wheel = ImGui::GetIO().MouseWheel;
+				if (wheel != 0.0f)
 				{
-					// Camera rotation
-					ImVec2 MouseDelta = ImGui::GetIO().MouseDelta;
-					if (MouseDelta.x != 0.0f || MouseDelta.y != 0.0f)
+					if (PreviewCamera)
 					{
-						if (PreviewCamera)
-						{
-							PreviewCamera->ApplyRotationInput(FVector2D(MouseDelta.x, MouseDelta.y));
-						}
-					}
-
-					// Camera movement
-					FVector MoveDirection = FVector::Zero();
-					if (ImGui::IsKeyDown(ImGuiKey_W)) MoveDirection.X += 1.0f;
-					if (ImGui::IsKeyDown(ImGuiKey_S)) MoveDirection.X -= 1.0f;
-					if (ImGui::IsKeyDown(ImGuiKey_D)) MoveDirection.Y += 1.0f;
-					if (ImGui::IsKeyDown(ImGuiKey_A)) MoveDirection.Y -= 1.0f;
-					if (ImGui::IsKeyDown(ImGuiKey_E)) MoveDirection.Z += 1.0f;
-					if (ImGui::IsKeyDown(ImGuiKey_Q)) MoveDirection.Z -= 1.0f;
-					if (!MoveDirection.IsZero())
-					{
-						if (PreviewCamera)
-						{
-							float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
-							PreviewCamera->ApplyMovementInput(MoveDirection, DeltaSeconds);
-						}
-					}
-
-					// Camera zoom
-					float wheel = ImGui::GetIO().MouseWheel;
-					if (wheel != 0.0f)
-					{
-						if (PreviewCamera)
-						{
-							float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
-							PreviewCamera->ApplyZoomInput(wheel, DeltaSeconds);
-						}
+						float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+						PreviewCamera->ApplyZoomInput(wheel, DeltaSeconds);
 					}
 				}
 			}
