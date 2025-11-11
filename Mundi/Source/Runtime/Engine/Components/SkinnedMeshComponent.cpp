@@ -47,6 +47,10 @@ void USkinnedMeshComponent::CollectMeshBatches(
         return;
     }
 
+    // CPU Skinning 업데이트 (매 프레임 정점 변환)
+    ID3D11DeviceContext* DeviceContext = GEngine.GetRHIDevice()->GetDeviceContext();
+    SkeletalMesh->UpdateCPUSkinning(DeviceContext);
+
     const TArray<FFlesh>& FleshesInfo = SkeletalMesh->GetFleshesInfo();
 
     auto DetermineMaterialAndShader = [&](uint32 SectionIndex) -> TPair<UMaterialInterface*, UShader*>
@@ -131,22 +135,8 @@ void USkinnedMeshComponent::CollectMeshBatches(
         BatchElement.StartIndex = StartIndex;
         BatchElement.BaseVertexIndex = 0;
 
-        // 본의 가중치 적용 - 각 본의 Skinning Matrix를 가중치로 블렌딩
-        FMatrix SkinningMatrix; // 0으로 초기화됨
-        for (int32 i = 0; i < Flesh.Bones.size(); i++)
-        {
-            UBone* Bone = Flesh.Bones[i];
-            if (!Bone)
-                continue;
-
-            float Weight = Flesh.Weights[i];
-            FMatrix BoneMatrix = Bone->GetSkinningMatrix();
-
-            // 행렬의 각 요소를 가중치로 블렌딩
-            SkinningMatrix += BoneMatrix * Weight;
-        }
-
-        BatchElement.WorldMatrix = GetWorldMatrix() * SkinningMatrix;
+        // CPU Skinning은 정점별로 처리되므로 여기서는 World Matrix만 설정
+        BatchElement.WorldMatrix = GetWorldMatrix();
         BatchElement.ObjectID = InternalIndex;
         BatchElement.PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
@@ -506,7 +496,7 @@ void USkinnedMeshComponent::DuplicateSubObjects()
     // 1. SkeletalMesh 깊은 복사 (Bone 조작을 위해 필수)
     if (SkeletalMesh)
     {
-        SkeletalMesh = static_cast<USkeletalMesh*>(SkeletalMesh->Duplicate());
+        SkeletalMesh = SkeletalMesh->Duplicate();
     }
 
     // 2. 원본 MID -> 복사본 MID 매핑 테이블

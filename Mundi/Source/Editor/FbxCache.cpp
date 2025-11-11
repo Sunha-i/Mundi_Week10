@@ -126,26 +126,12 @@ struct FSkeletalCacheBone
 struct FSkeletalCacheFlesh
 {
 	FGroupInfo GroupInfo;
-	TArray<int32> BoneIndices;
-	TArray<float> Weights;
-	float WeightsTotal = 1.0f;
+	// CPU Skinning으로 변경되어 Flesh별 Bone/Weight는 제거됨
+	// Skinning 데이터는 정점별로 FSkinnedVertex에 저장됨
 
 	friend FArchive& operator<<(FArchive& Ar, FSkeletalCacheFlesh& Flesh)
 	{
 		Ar << Flesh.GroupInfo;
-
-		if (Ar.IsSaving())
-		{
-			Serialization::WriteArray(Ar, Flesh.BoneIndices);
-			Serialization::WriteArray(Ar, Flesh.Weights);
-		}
-		else
-		{
-			Serialization::ReadArray(Ar, Flesh.BoneIndices);
-			Serialization::ReadArray(Ar, Flesh.Weights);
-		}
-
-		Ar << Flesh.WeightsTotal;
 		return Ar;
 	}
 };
@@ -158,6 +144,7 @@ struct FSkeletalCacheData
 	bool bHasMaterial = false;
 	TArray<FSkeletalCacheFlesh> Fleshes;
 	TArray<FSkeletalCacheBone> Bones;
+	TArray<FSkinnedVertex> SkinnedVertices;  // CPU Skinning용 정점 데이터
 
 	// 메시 + 본 전체 직렬화 (저장/읽기)
 	friend FArchive& operator<<(FArchive& Ar, FSkeletalCacheData& Data)
@@ -201,6 +188,33 @@ struct FSkeletalCacheData
 		{
 			Data.Bones.resize(BoneCount);
 			for (auto& Bone : Data.Bones) Ar << Bone;
+		}
+
+		// SkinnedVertices 정보 (CPU Skinning용)
+		uint32 SkinnedVertexCount = static_cast<uint32>(Data.SkinnedVertices.size());
+		Ar << SkinnedVertexCount;
+		if (Ar.IsSaving())
+		{
+			for (auto& SV : Data.SkinnedVertices)
+			{
+				// FVertexDynamic 부분
+				Ar << SV.Position << SV.Normal << SV.UV << SV.Tangent << SV.Color;
+				// Skinning 데이터
+				Ar.Serialize(&SV.BoneIndices[0], sizeof(uint32) * 4);
+				Ar.Serialize(&SV.BoneWeights[0], sizeof(float) * 4);
+			}
+		}
+		else
+		{
+			Data.SkinnedVertices.resize(SkinnedVertexCount);
+			for (auto& SV : Data.SkinnedVertices)
+			{
+				// FVertexDynamic 부분
+				Ar << SV.Position << SV.Normal << SV.UV << SV.Tangent << SV.Color;
+				// Skinning 데이터
+				Ar.Serialize(&SV.BoneIndices[0], sizeof(uint32) * 4);
+				Ar.Serialize(&SV.BoneWeights[0], sizeof(float) * 4);
+			}
 		}
 
 		return Ar;
@@ -257,6 +271,7 @@ static void BuildSkeletalCacheData(const FSkeletalMesh* Mesh, FSkeletalCacheData
 	GatherBonesRecursive(Root, -1, OutData.Bones, BoneIndexMap);
 
 	// Flesh 그룹 변환
+	// Fleshes 복사 (이제 FGroupInfo만 가짐)
 	OutData.Fleshes.resize(Mesh->Fleshes.size());
 	for (size_t FleshIdx = 0; FleshIdx < Mesh->Fleshes.size(); ++FleshIdx)
 	{
@@ -265,16 +280,10 @@ static void BuildSkeletalCacheData(const FSkeletalMesh* Mesh, FSkeletalCacheData
 		CachedFlesh.GroupInfo.StartIndex = Flesh.StartIndex;
 		CachedFlesh.GroupInfo.IndexCount = Flesh.IndexCount;
 		CachedFlesh.GroupInfo.InitialMaterialName = Flesh.InitialMaterialName;
-		CachedFlesh.Weights = Flesh.Weights;
-		CachedFlesh.WeightsTotal = Flesh.WeightsTotal;
-
-		// 본 인덱스 매핑
-		CachedFlesh.BoneIndices.clear();
-		for (UBone* Bone : Flesh.Bones)
-		{
-			CachedFlesh.BoneIndices.push_back(BoneIndexMap.Contains(Bone) ? *BoneIndexMap.Find(Bone) : -1);
-		}
 	}
+
+	// SkinnedVertices 복사 (CPU Skinning용)
+	OutData.SkinnedVertices = Mesh->SkinnedVertices;
 }
 
 
@@ -456,24 +465,20 @@ bool TryLoadSkeletalMeshCache(const FString& MeshBinPath, const FString& MatBinP
 			TArray<UBone*> BonePointers;
 			USkeleton* Skeleton = RebuildSkeletonFromCache(CacheData.Bones, BonePointers);
 			Mesh->Skeleton = Skeleton;
-
-			// Flesh 데이터 복원
-			for (const FSkeletalCacheFlesh& CachedFlesh : CacheData.Fleshes)
-			{
-				FFlesh Flesh;
-				Flesh.StartIndex = CachedFlesh.GroupInfo.StartIndex;
-				Flesh.IndexCount = CachedFlesh.GroupInfo.IndexCount;
-				Flesh.InitialMaterialName = CachedFlesh.GroupInfo.InitialMaterialName;
-				for (int32 BoneIndex : CachedFlesh.BoneIndices)
-				{
-					if (BoneIndex >= 0 && BoneIndex < BonePointers.Num())
-						Flesh.Bones.Add(BonePointers[BoneIndex]);
-				}
-				Flesh.Weights = CachedFlesh.Weights;
-				Flesh.WeightsTotal = CachedFlesh.WeightsTotal;
-				Mesh->Fleshes.Add(Flesh);
-			}
 		}
+
+		// Flesh 데이터 복원 (이제 FGroupInfo만 가짐)
+		for (const FSkeletalCacheFlesh& CachedFlesh : CacheData.Fleshes)
+		{
+			FFlesh Flesh;
+			Flesh.StartIndex = CachedFlesh.GroupInfo.StartIndex;
+			Flesh.IndexCount = CachedFlesh.GroupInfo.IndexCount;
+			Flesh.InitialMaterialName = CachedFlesh.GroupInfo.InitialMaterialName;
+			Mesh->Fleshes.Add(Flesh);
+		}
+
+		// SkinnedVertices 복원 (CPU Skinning용)
+		Mesh->SkinnedVertices = CacheData.SkinnedVertices;
 
 		return true;
 	}

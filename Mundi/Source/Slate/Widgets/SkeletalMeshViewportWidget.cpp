@@ -34,8 +34,8 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 	ACameraActor* Camera = Viewport.GetViewportClient()->GetCamera();
 	if (Camera)
 	{
-		Camera->SetActorLocation({0.f, -70.f, 200.f});
-		Camera->SetRotationFromEulerAngles({0.f, 90.f, -90.f});
+		Camera->SetActorLocation({-5.f, 0.f, 0.f});
+		Camera->SetRotationFromEulerAngles({0.f, 0.f, -0.f});
 		WorldForPreviewManager.SetCamera(Camera);
 	}
 

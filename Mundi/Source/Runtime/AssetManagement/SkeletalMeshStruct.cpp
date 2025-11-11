@@ -4,57 +4,79 @@
 
 FSkeletalMesh::FSkeletalMesh(const FSkeletalMesh& Other) : FMesh(static_cast<const FMesh&>(Other))
 {
-    // Skeleton 복사 (있을 경우에만)
-    TMap<FString, UBone*> BoneMap;
-
+    // 1. Skeleton 깊은 복사
     if (Other.Skeleton)
     {
         Skeleton = Other.Skeleton->Duplicate();
-
-        // BoneMap 생성: 복사된 Skeleton의 모든 Bone을 이름으로 매핑
-        Skeleton->ForEachBone([&BoneMap](UBone* Bone) {
-            if (Bone)
-            {
-                FString BoneName = Bone->GetName().ToString();
-                BoneMap.Add(BoneName, Bone);
-            }
-        });
     }
 
-    // Flesh 배열 복사 (Skeleton 유무와 관계없이 항상 복사)
-    for (const FFlesh& OtherFlesh : Other.Fleshes)
+    // 2. Flesh 배열 복사 (이제 FGroupInfo만 가지므로 간단히 복사)
+    Fleshes = Other.Fleshes;
+
+    // 3. SkinnedVertices 복사 및 BoneIndices 재매핑
+    // 원본과 복사된 Skeleton의 Bone 순서 매핑을 생성
+    if (Skeleton && Other.Skeleton)
     {
-        FFlesh NewFlesh;
-
-        // FGroupInfo 멤버 복사 (StartIndex, IndexCount, InitialMaterialName)
-        NewFlesh.StartIndex = OtherFlesh.StartIndex;
-        NewFlesh.IndexCount = OtherFlesh.IndexCount;
-        NewFlesh.InitialMaterialName = OtherFlesh.InitialMaterialName;
-
-        // Bones 배열 복사 (Skeleton이 있을 경우에만)
-        if (Skeleton)
-        {
-            for (int i = 0; i < OtherFlesh.Bones.Num(); i++)
+        // 원본 Skeleton의 Bone 순서 (이름 -> 인덱스)
+        TMap<FString, int32> OriginalBoneNameToIndex;
+        int32 OriginalIndex = 0;
+        Other.Skeleton->ForEachBone([&](UBone* Bone) {
+            if (Bone)
             {
-                UBone* OtherBone = OtherFlesh.Bones[i];
-                if (OtherBone)
-                {
-                    FString BoneName = OtherBone->GetName().ToString();
-                    UBone* const* FoundBone = BoneMap.Find(BoneName);
+                OriginalBoneNameToIndex.Add(Bone->GetName().ToString(), OriginalIndex++);
+            }
+        });
 
-                    if (FoundBone && *FoundBone)
+        // 복사된 Skeleton의 Bone 순서 (이름 -> 인덱스)
+        TMap<FString, int32> NewBoneNameToIndex;
+        int32 NewIndex = 0;
+        Skeleton->ForEachBone([&](UBone* Bone) {
+            if (Bone)
+            {
+                NewBoneNameToIndex.Add(Bone->GetName().ToString(), NewIndex++);
+            }
+        });
+
+        // 인덱스 재매핑 테이블 생성 (원본 인덱스 -> 새 인덱스)
+        TArray<int32> IndexRemapping;
+        IndexRemapping.resize(OriginalBoneNameToIndex.Num(), -1);
+
+        for (const auto& Pair : OriginalBoneNameToIndex)
+        {
+            const FString& BoneName = Pair.first;
+            int32 OldIndex = Pair.second;
+
+            if (const int32* NewIndexPtr = NewBoneNameToIndex.Find(BoneName))
+            {
+                IndexRemapping[OldIndex] = *NewIndexPtr;
+            }
+        }
+
+        // SkinnedVertices 복사 및 BoneIndices 재매핑
+        SkinnedVertices.resize(Other.SkinnedVertices.Num());
+        for (int i = 0; i < Other.SkinnedVertices.Num(); i++)
+        {
+            SkinnedVertices[i] = Other.SkinnedVertices[i];
+
+            // BoneIndices 재매핑
+            for (int j = 0; j < 4; j++)
+            {
+                uint32 OldBoneIndex = Other.SkinnedVertices[i].BoneIndices[j];
+                if (OldBoneIndex < (uint32)IndexRemapping.Num())
+                {
+                    int32 NewBoneIndex = IndexRemapping[OldBoneIndex];
+                    if (NewBoneIndex >= 0)
                     {
-                        NewFlesh.Bones.Add(*FoundBone);
+                        SkinnedVertices[i].BoneIndices[j] = (uint32)NewBoneIndex;
                     }
                 }
             }
         }
-
-        // Weights 배열 복사 (값 타입이므로 단순 복사)
-        NewFlesh.Weights = OtherFlesh.Weights;
-        NewFlesh.WeightsTotal = OtherFlesh.WeightsTotal;
-
-        Fleshes.Add(NewFlesh);
+    }
+    else
+    {
+        // Skeleton이 없으면 그냥 복사
+        SkinnedVertices = Other.SkinnedVertices;
     }
 }
 
