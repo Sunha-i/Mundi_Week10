@@ -93,6 +93,22 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	WorldForPreviewManager.SetActor(SkeletalMeshActor);
 }
 
+void USkeletalMeshViewportWidget::Update()
+{
+	const float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+	FViewportClient* Client = Viewport.GetViewportClient();
+	if (Client)
+	{
+		Client->Tick(DeltaSeconds);
+	}
+
+	UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview();
+	if (PreviewWorld)
+	{
+		PreviewWorld->Tick(DeltaSeconds);
+	}
+}
+
 void USkeletalMeshViewportWidget::RenderWidget()
 {
 	if (TargetMeshName.Empty())
@@ -169,6 +185,28 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 				static_cast<float>(PreviewTextureHeight)
 			);
 			ImGui::Image((void*)PreviewSRV, PreviewImageSize);
+
+			if (ImGui::IsItemHovered())
+			{
+				ImVec2 MousePos = ImGui::GetMousePos();
+				ImVec2 ImagePos = ImGui::GetItemRectMin();
+				int LocalX = static_cast<int>(MousePos.x - ImagePos.x);
+				int LocalY = static_cast<int>(MousePos.y - ImagePos.y);
+
+				ViewportClient->MouseMove(&Viewport, LocalX, LocalY);
+
+				for (int i = 0; i < 3; ++i)    // Left click(0), Right click(1), Wheel click(2)
+				{
+					if (ImGui::IsMouseDown(i) && ImGui::IsItemClicked(i))
+					{
+						ViewportClient->MouseButtonDown(&Viewport, LocalX, LocalY, i);
+					}
+					else if (ImGui::IsMouseReleased(i))
+					{
+						ViewportClient->MouseButtonUp(&Viewport, LocalX, LocalY, i);
+					}
+				}
+			}
 		}
 		else
 		{
