@@ -131,8 +131,8 @@ void USkinnedMeshComponent::CollectMeshBatches(
         BatchElement.StartIndex = StartIndex;
         BatchElement.BaseVertexIndex = 0;
 
-        // 본의 가중치 적용
-        FTransform BoneOffSet;
+        // 본의 가중치 적용 - 각 본의 Skinning Matrix를 가중치로 블렌딩
+        FMatrix SkinningMatrix; // 0으로 초기화됨
         for (int32 i = 0; i < Flesh.Bones.size(); i++)
         {
             UBone* Bone = Flesh.Bones[i];
@@ -140,11 +140,13 @@ void USkinnedMeshComponent::CollectMeshBatches(
                 continue;
 
             float Weight = Flesh.Weights[i];
-            BoneOffSet += Bone->GetBoneOffset() * Weight;
+            FMatrix BoneMatrix = Bone->GetSkinningMatrix();
+
+            // 행렬의 각 요소를 가중치로 블렌딩
+            SkinningMatrix += BoneMatrix * Weight;
         }
-        FMatrix SkinningMatrix = BoneOffSet.GetModelingMatrix();
-        
-        BatchElement.WorldMatrix = GetWorldMatrix();// *SkinningMatrix;
+
+        BatchElement.WorldMatrix = GetWorldMatrix() * SkinningMatrix;
         BatchElement.ObjectID = InternalIndex;
         BatchElement.PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 

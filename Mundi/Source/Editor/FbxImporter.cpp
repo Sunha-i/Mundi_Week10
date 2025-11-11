@@ -4,6 +4,8 @@
 #include "SkeletalMeshStruct.h"
 #include "StaticMesh.h"
 
+#include <fbxsdk/utils/fbxrootnodeutility.h>
+
 // ============================================================================
 // [FBX 임포트] Scene 불러오기
 // ============================================================================
@@ -28,13 +30,25 @@ FbxScene* FFbxImporter::ImportFbxScene(const FString& Path)
 	}
 
 	Importer->Destroy();
+
+	FbxAxisSystem SourceAxis = Scene->GetGlobalSettings().GetAxisSystem();
+	FbxAxisSystem::ECoordSystem CoordSystem = FbxAxisSystem::eLeftHanded;
+	FbxAxisSystem::EUpVector UpVector = FbxAxisSystem::eZAxis;
+	FbxAxisSystem::EFrontVector FrontVector = FbxAxisSystem::eParityEven;
+	FbxAxisSystem TargetAxis(UpVector, FrontVector, CoordSystem);
+	if (SourceAxis != TargetAxis)
+	{
+		FbxRootNodeUtility::RemoveAllFbxRoots(Scene);
+		TargetAxis.DeepConvertScene(Scene);
+		Scene->GetGlobalSettings().SetAxisSystem(TargetAxis);
+	}
+
 	return Scene;
 }
-
 // ============================================================================
 // [FBX 머티리얼 파싱] 스태틱/스켈레탈 공용
 // ============================================================================
-void FFbxImporter::ParseFbxMaterials(FbxScene* Scene, const FString& Path,
+void FFbxImporter::CollectMaterials(FbxScene* Scene, const FString& Path,
 	TMap<int64, FMaterialInfo>& OutMatMap, TArray<FMaterialInfo>& OutInfos)
 {
 	if (!Scene) return;
@@ -91,13 +105,12 @@ FTransform FFbxImporter::ConvertFbxTransform(const FbxAMatrix& InMatrix)
 	FbxQuaternion R = InMatrix.GetQ();
 	FbxVector4 S = InMatrix.GetS();
 
-	Result.Translation = ConvertPosition(T);
+	Result.Translation = FBXUtil::ConvertPosition(T);
 	Result.Rotation = FQuat(
 		static_cast<float>(R[0]),
-		static_cast<float>(-R[1]),
-		static_cast<float>(-R[2]),
-		static_cast<float>(R[3])
-	);
+		static_cast<float>(R[1]),
+		static_cast<float>(R[2]),
+		static_cast<float>(R[3]));
 	Result.Scale3D = FVector(static_cast<float>(S[0]), static_cast<float>(S[1]), static_cast<float>(S[2]));
 	return Result;
 }
@@ -137,7 +150,7 @@ void ExtractCommonMeshData(
 		{
 			TArray<uint32> TriVertIdx;
 
-			int V0 = 0, V1 = TriIdx + 2, V2 = TriIdx + 1;
+			int V0 = 0, V1 = TriIdx + 1, V2 = TriIdx + 2;
 			for (int LocalVertIdx : { V0, V1, V2 })
 			{
 				int CPIdx = InMesh->GetPolygonVertex(PolyIdx, LocalVertIdx);
@@ -288,7 +301,7 @@ bool FFbxImporter::BuildStaticMeshFromPath(const FString& Path, FStaticMesh* Out
 	if (!Scene) return false;
 
 	TMap<int64, FMaterialInfo> MatMap;
-	ParseFbxMaterials(Scene, Path, MatMap, OutMats);
+	CollectMaterials(Scene, Path, MatMap, OutMats);
 
 	FbxNode* Root = Scene->GetRootNode();
 	if (Root)
@@ -325,19 +338,35 @@ UBone* FFbxImporter::FindSkeletonRootAndBuild(FbxNode* RootNode)
 	if (!RootNode)
 		return nullptr;
 
-	for (int i = 0; i < RootNode->GetChildCount(); i++)
+	// 내부 재귀 람다 (DFS 방식)
+	std::function<UBone*(FbxNode*)> FindRecursively = [&](FbxNode* Node) -> UBone*
 	{
-		FbxNode* Child = RootNode->GetChild(i);
-		if (!Child) continue;
+		if (!Node)
+			return nullptr;
 
-		if (auto* Attr = Child->GetNodeAttribute())
+		// 현재 노드가 Skeleton이면 바로 처리
+		if (auto* Attr = Node->GetNodeAttribute())
 		{
 			if (Attr->GetAttributeType() == FbxNodeAttribute::eSkeleton)
-				return ProcessSkeletonNode(Child);
+			{
+				UE_LOG("Found skeleton root: %s", Node->GetName());
+				return ProcessSkeletonNode(Node);
+			}
 		}
-	}
-	return nullptr;
+
+		// 자식 노드 순회 (깊이 우선 탐색)
+		for (int i = 0; i < Node->GetChildCount(); ++i)
+		{
+			if (UBone* Found = FindRecursively(Node->GetChild(i)))
+				return Found; // 첫 번째 스켈레톤 발견 시 반환
+		}
+
+		return nullptr;
+	};
+
+	return FindRecursively(RootNode);
 }
+
 
 // ============================================================================
 // [FBX Skeleton 노드 재귀 생성]

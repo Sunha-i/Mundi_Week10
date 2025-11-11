@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <fbxsdk.h>
 #include "UEContainer.h"
@@ -22,18 +22,16 @@ namespace FBXUtil
 	{
 		return FVector(
 			static_cast<float>(Pos[0]),
-			static_cast<float>(-Pos[1]),
-			static_cast<float>(Pos[2])
-		) * UnitScale;
+			static_cast<float>(Pos[1]),
+			static_cast<float>(Pos[2])) * UnitScale;
 	}
 
 	inline FVector ConvertNormal(const FbxVector4& Normal)
 	{
 		return FVector(
 			static_cast<float>(Normal[0]),
-			static_cast<float>(-Normal[1]),
-			static_cast<float>(Normal[2])
-		);
+			static_cast<float>(Normal[1]),
+			static_cast<float>(Normal[2]));
 	}
 
 	inline FVector4 DefaultTangent()
@@ -57,7 +55,7 @@ public:
 	// =======================
 	//  Material 파싱
 	// =======================
-	void ParseFbxMaterials(
+	void CollectMaterials(
 		FbxScene* Scene,
 		const FString& Path,
 		TMap<int64, FMaterialInfo>& OutMatMap,
@@ -102,3 +100,4 @@ public:
 private:
 	FbxManager* SdkManager = nullptr;
 };
+

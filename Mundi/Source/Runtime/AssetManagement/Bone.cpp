@@ -74,32 +74,36 @@ void UBone::SetRelativeTransform(const FTransform& InRelativeTransform)
     RelativeTransform = InRelativeTransform;
 }
 
-const FVector& UBone::GetWorldLocation() const
+FVector UBone::GetWorldLocation() const
 {
     if (!Parent)
         return GetRelativeLocation();
-    return RelativeTransform.GetWorldTransform(Parent->RelativeTransform).Translation;
+    FTransform ParentWorldTransform = Parent->GetWorldTransform();
+    return ParentWorldTransform.GetWorldTransform(RelativeTransform).Translation;
 }
 
-const FQuat& UBone::GetWorldRotation() const
+FQuat UBone::GetWorldRotation() const
 {
     if (!Parent)
         return GetRelativeRotation();
-    return RelativeTransform.GetWorldTransform(Parent->RelativeTransform).Rotation;
+    FTransform ParentWorldTransform = Parent->GetWorldTransform();
+    return ParentWorldTransform.GetWorldTransform(RelativeTransform).Rotation;
 }
 
-const FVector& UBone::GetWorldScale() const
+FVector UBone::GetWorldScale() const
 {
     if (!Parent)
         return GetRelativeScale();
-    return RelativeTransform.GetWorldTransform(Parent->RelativeTransform).Scale3D;
+    FTransform ParentWorldTransform = Parent->GetWorldTransform();
+    return ParentWorldTransform.GetWorldTransform(RelativeTransform).Scale3D;
 }
 
-const FTransform& UBone::GetWorldTransform() const
+FTransform UBone::GetWorldTransform() const
 {
     if (!Parent)
         return RelativeTransform;
-    return RelativeTransform.GetWorldTransform(Parent->RelativeTransform);
+    FTransform ParentWorldTransform = Parent->GetWorldTransform();
+    return ParentWorldTransform.GetWorldTransform(RelativeTransform);
 }
 
 // Local BindPos Getter Setter
@@ -144,32 +148,36 @@ void UBone::SetRelativeBindPoseTransform(const FTransform& InBindPoseTransform)
 }
 
 // World BindPos Getter
-const FVector& UBone::GetWorldBindPoseLocation() const
+FVector UBone::GetWorldBindPoseLocation() const
 {
     if (!Parent)
         return GetRelativeBindPoseLocation();
-    return Parent->BindPose.GetWorldTransform(BindPose).Translation;
+    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
+    return ParentWorldBindPose.GetWorldTransform(BindPose).Translation;
 }
 
-const FQuat& UBone::GetWorldBindPoseRotation() const
+FQuat UBone::GetWorldBindPoseRotation() const
 {
     if (!Parent)
         return GetRelativeBindPoseRotation();
-    return Parent->BindPose.GetWorldTransform(BindPose).Rotation;
+    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
+    return ParentWorldBindPose.GetWorldTransform(BindPose).Rotation;
 }
 
-const FVector& UBone::GetWorldBindPoseScale() const
+FVector UBone::GetWorldBindPoseScale() const
 {
     if (!Parent)
         return GetRelativeBindPoseScale();
-    return Parent->BindPose.GetWorldTransform(BindPose).Scale3D;
+    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
+    return ParentWorldBindPose.GetWorldTransform(BindPose).Scale3D;
 }
 
-const FTransform& UBone::GetWorldBindPose() const
+FTransform UBone::GetWorldBindPose() const
 {
     if (!Parent)
         return GetRelativeBindPose();
-    return Parent->BindPose.GetWorldTransform(BindPose);
+    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
+    return ParentWorldBindPose.GetWorldTransform(BindPose);
 }
 
 // BindPos와 현 Transform의 차이를 반환
