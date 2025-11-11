@@ -1722,6 +1722,7 @@ bool UPropertyRenderer::RenderTransformProperty(const FProperty& Prop, void* Ins
 	const float FrameHeight = ImGui::GetFrameHeight(); // 입력 필드 높이
 	const float ColorBoxWidth = FrameHeight * 0.25f;
 	const float ColorBoxHeight = FrameHeight;
+	const float rounding = ImGui::GetStyle().FrameRounding;
 
 	// 프로퍼티별 고유 ID 스코프 시작
 	ImGui::PushID(Prop.Name);
@@ -1731,73 +1732,44 @@ bool UPropertyRenderer::RenderTransformProperty(const FProperty& Prop, void* Ins
 	ImGui::SameLine(LabelWidth);
 
 	ImDrawList* DrawList = ImGui::GetWindowDrawList();
+	const char* format = " %.3f"; // 숫자 앞에 패딩 추가
 
-	// X축 (Red) - 색상 박스 + 입력 필드
+	// X축 (Red)
 	ImGui::PushID("X");
-
-	// 색상 박스
-	ImVec2 CursorPos = ImGui::GetCursorScreenPos();
-	DrawList->AddRectFilled(
-		CursorPos,
-		ImVec2(CursorPos.x + ColorBoxWidth, CursorPos.y + ColorBoxHeight),
-		ImGui::ColorConvertFloat4ToU32(ColorX)
-	);
-	ImGui::Dummy(ImVec2(ColorBoxWidth, ColorBoxHeight));
-	ImGui::SameLine(0.0f, 0.0f); // 간격 없이 붙임
-
-	// 입력 필드
-	ImGui::PushItemWidth(InputWidth);
-	if (ImGui::DragFloat("##X", &Value->X, Speed))
+	ImGui::PushItemWidth(InputWidth + ColorBoxWidth);
+	if (ImGui::DragFloat("##X", &Value->X, Speed, 0.0f, 0.0f, format))
 	{
 		bAnyChanged = true;
 	}
 	ImGui::PopItemWidth();
+	ImVec2 posX = ImGui::GetItemRectMin();
+	DrawList->AddRectFilled(posX, ImVec2(posX.x + ColorBoxWidth, posX.y + ColorBoxHeight), ImGui::ColorConvertFloat4ToU32(ColorX), rounding, ImDrawFlags_RoundCornersLeft);
 	ImGui::PopID();
 	ImGui::SameLine();
 
-	// Y축 (Green) - 색상 박스 + 입력 필드
+	// Y축 (Green)
 	ImGui::PushID("Y");
-
-	// 색상 박스
-	CursorPos = ImGui::GetCursorScreenPos();
-	DrawList->AddRectFilled(
-		CursorPos,
-		ImVec2(CursorPos.x + ColorBoxWidth, CursorPos.y + ColorBoxHeight),
-		ImGui::ColorConvertFloat4ToU32(ColorY)
-	);
-	ImGui::Dummy(ImVec2(ColorBoxWidth, ColorBoxHeight));
-	ImGui::SameLine(0.0f, 0.0f); // 간격 없이 붙임
-
-	// 입력 필드
-	ImGui::PushItemWidth(InputWidth);
-	if (ImGui::DragFloat("##Y", &Value->Y, Speed))
+	ImGui::PushItemWidth(InputWidth + ColorBoxWidth);
+	if (ImGui::DragFloat("##Y", &Value->Y, Speed, 0.0f, 0.0f, format))
 	{
 		bAnyChanged = true;
 	}
 	ImGui::PopItemWidth();
+	ImVec2 posY = ImGui::GetItemRectMin();
+	DrawList->AddRectFilled(posY, ImVec2(posY.x + ColorBoxWidth, posY.y + ColorBoxHeight), ImGui::ColorConvertFloat4ToU32(ColorY), rounding, ImDrawFlags_RoundCornersLeft);
 	ImGui::PopID();
 	ImGui::SameLine();
 
-	// Z축 (Blue) - 색상 박스 + 입력 필드
+	// Z축 (Blue)
 	ImGui::PushID("Z");
-
-	// 색상 박스
-	CursorPos = ImGui::GetCursorScreenPos();
-	DrawList->AddRectFilled(
-		CursorPos,
-		ImVec2(CursorPos.x + ColorBoxWidth, CursorPos.y + ColorBoxHeight),
-		ImGui::ColorConvertFloat4ToU32(ColorZ)
-	);
-	ImGui::Dummy(ImVec2(ColorBoxWidth, ColorBoxHeight));
-	ImGui::SameLine(0.0f, 0.0f); // 간격 없이 붙임
-
-	// 입력 필드
-	ImGui::PushItemWidth(InputWidth);
-	if (ImGui::DragFloat("##Z", &Value->Z, Speed))
+	ImGui::PushItemWidth(InputWidth + ColorBoxWidth);
+	if (ImGui::DragFloat("##Z", &Value->Z, Speed, 0.0f, 0.0f, format))
 	{
 		bAnyChanged = true;
 	}
 	ImGui::PopItemWidth();
+	ImVec2 posZ = ImGui::GetItemRectMin();
+	DrawList->AddRectFilled(posZ, ImVec2(posZ.x + ColorBoxWidth, posZ.y + ColorBoxHeight), ImGui::ColorConvertFloat4ToU32(ColorZ), rounding, ImDrawFlags_RoundCornersLeft);
 	ImGui::PopID();
 	ImGui::SameLine();
 
