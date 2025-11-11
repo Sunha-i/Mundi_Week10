@@ -10,7 +10,7 @@ public:
 
     void SetCamera(ACameraActor* InCamera);
     void SetActor(AActor* InActor);
-    void SetDirectionalLight(const FVector& LightRotation);
+    void SetDirectionalLight(const FVector& LightRotation, const FVector& LightLocation = FVector(0.f, 0.f, 0.f));
 
     UWorld* GetWorldForPreview() const;
     void SetWorldForPreview(UWorld* InWorldForPreview);
