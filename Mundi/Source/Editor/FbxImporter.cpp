@@ -194,6 +194,74 @@ void ExtractCommonMeshData(
 		}
 	}
 
+	// ----- [Tangent 계산] -----
+	// OBJ Manager와 동일한 방식으로 계산
+	TArray<FVector> TangentAccumulator;
+	TArray<FVector> BitangentAccumulator;
+	TangentAccumulator.resize(Vertices.size(), FVector(0.f, 0.f, 0.f));
+	BitangentAccumulator.resize(Vertices.size(), FVector(0.f, 0.f, 0.f));
+
+	// 각 삼각형마다 Tangent/Bitangent 계산
+	for (const auto& Pair : PolyToVertIdx)
+	{
+		const TArray<uint32>& TriIndices = Pair.second;
+		if (TriIndices.size() != 3) continue;
+
+		uint32 i0 = TriIndices[0];
+		uint32 i1 = TriIndices[1];
+		uint32 i2 = TriIndices[2];
+
+		const FVector& P0 = Vertices[i0].pos;
+		const FVector& P1 = Vertices[i1].pos;
+		const FVector& P2 = Vertices[i2].pos;
+
+		const FVector2D& UV0 = Vertices[i0].tex;
+		const FVector2D& UV1 = Vertices[i1].tex;
+		const FVector2D& UV2 = Vertices[i2].tex;
+
+		FVector E1 = P1 - P0;
+		FVector E2 = P2 - P0;
+
+		float DeltaU1 = UV1.X - UV0.X;
+		float DeltaV1 = UV1.Y - UV0.Y;
+		float DeltaU2 = UV2.X - UV0.X;
+		float DeltaV2 = UV2.Y - UV0.Y;
+
+		float Determinant = DeltaU1 * DeltaV2 - DeltaU2 * DeltaV1;
+		if (fabs(Determinant) < 1e-6f) continue;  // 퇴화된 삼각형 건너뛰기
+
+		float DeterminantInv = 1.0f / Determinant;
+
+		FVector Tangent = (E1 * DeltaV2 - E2 * DeltaV1) * DeterminantInv;
+		FVector Bitangent = (-E1 * DeltaU2 + E2 * DeltaU1) * DeterminantInv;
+
+		// 삼각형의 세 정점에 누적
+		TangentAccumulator[i0] += Tangent;
+		TangentAccumulator[i1] += Tangent;
+		TangentAccumulator[i2] += Tangent;
+
+		BitangentAccumulator[i0] += Bitangent;
+		BitangentAccumulator[i1] += Bitangent;
+		BitangentAccumulator[i2] += Bitangent;
+	}
+
+	// Gram-Schmidt 직교화 및 Handedness 계산
+	for (size_t i = 0; i < Vertices.size(); i++)
+	{
+		FVector Tangent = TangentAccumulator[i];
+		const FVector& Normal = Vertices[i].normal;
+		FVector Bitangent = BitangentAccumulator[i];
+
+		// Gram-Schmidt: Tangent에서 Normal 성분 제거
+		Tangent = Tangent - Normal * FVector::Dot(Tangent, Normal);
+		Tangent.Normalize();
+
+		// Handedness 계산 (w값)
+		float Handedness = FVector::Dot(FVector::Cross(Normal, Tangent), Bitangent) > 0.0f ? 1.0f : -1.0f;
+
+		Vertices[i].Tangent = FVector4(Tangent.X, Tangent.Y, Tangent.Z, Handedness);
+	}
+
 	// ----- [머티리얼별 그룹 분할] -----
 	FbxLayerElementMaterial* MatElem = InMesh->GetElementMaterial();
 	if (MatElem)
