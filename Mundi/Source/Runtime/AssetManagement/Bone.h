@@ -53,7 +53,7 @@ public:
     FTransform GetBoneOffset();
     FMatrix GetSkinningMatrix();
 
-    void SetParent(UBone* InParent);
+    void SetParent(UBone* InParent) { Parent = InParent; }
     UBone* GetParent() const { return Parent; }
 
     void AddChild(UBone* InChild);
