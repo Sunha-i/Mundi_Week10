@@ -3,7 +3,9 @@
 
 FPreviewScene::~FPreviewScene()
 {
+    OutputDebugStringA("[DESTRUCTOR] FPreviewScene START\n");
     DestroyWorldForPreviewScene();
+    OutputDebugStringA("[DESTRUCTOR] FPreviewScene END\n");
 }
 
 void FPreviewScene::CreateWorldForPreviewScene()
@@ -25,9 +27,20 @@ void FPreviewScene::DestroyWorldForPreviewScene()
 {
     if (WorldForPreview)
     {
-        for (AActor* Actor : WorldForPreview->GetEditorActors())
-            WorldForPreview->RemoveEditorActor(Actor);
+        // 참조 대신 복사본을 만들어서 순회 중 배열 수정 문제 방지
+        TArray<AActor*> EditorActorsCopy = WorldForPreview->GetEditorActors();
+
+        // Actor를 명시적으로 삭제 (World 소멸자가 손상된 Actor를 삭제하지 않도록)
+        for (int32 i = 0; i < EditorActorsCopy.size(); i++)
+        {
+            if (EditorActorsCopy[i])
+            {
+                WorldForPreview->RemoveEditorActor(EditorActorsCopy[i]);
+            }
+        }
+
         ObjectFactory::DeleteObject(WorldForPreview);
+        WorldForPreview = nullptr;
     }
 }
 
