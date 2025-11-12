@@ -48,6 +48,7 @@ public:
     ~UWorld() override;
 
     bool bPie = false;
+    bool bIsPreviewWorld = false;  // Preview Scene인지 여부 (에디터 전용 빌보드 생성 방지)
 public:
     /** 초기화 */
     void Initialize();

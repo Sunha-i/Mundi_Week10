@@ -12,6 +12,7 @@
 #include "FViewport.h"
 #include "Picking.h"
 #include "EditorEngine.h"
+#include "BillboardComponent.h"
 
 IMPLEMENT_CLASS(AGizmoActor)
 
@@ -153,7 +154,25 @@ void AGizmoActor::Tick(float DeltaSeconds)
 	if (!InputManager) InputManager = &UInputManager::GetInstance();
 	if (!UIManager) UIManager = &UUIManager::GetInstance();
 
-	// 컴포넌트 활성화 상태 업데이트    
+	// RootComponent의 Billboard 숨기기 (매 프레임 체크)
+	if (RootComponent)
+	{
+		// USceneComponent::OnRegister에서 생성된 BillboardComponent 찾아서 숨기기
+		for (USceneComponent* Child : RootComponent->GetAttachChildren())
+		{
+			if (UBillboardComponent* Billboard = Cast<UBillboardComponent>(Child))
+			{
+				if (Billboard->IsVisible())
+				{
+					UE_LOG("[GizmoActor] Found visible Billboard! Hiding it now.");
+					Billboard->SetVisibility(false);
+				}
+				break;
+			}
+		}
+	}
+
+	// 컴포넌트 활성화 상태 업데이트
 	if (SelectionManager && SelectionManager->HasSelection() && CameraActor)
 	{
 		USceneComponent* SelectedComponent = SelectionManager->GetSelectedComponent();
