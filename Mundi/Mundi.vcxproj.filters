@@ -557,6 +557,111 @@
     <ClCompile Include="Source\Editor\FbxCache.cpp">
       <Filter>Source\Editor</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Slate\PreviewScene.cpp">
+      <Filter>Source\Slate</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Slate\SkelMeshPreviewScene.cpp">
+      <Filter>Source\Slate</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Editor\FbxImporter.cpp">
+      <Filter>Source\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lapi.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lauxlib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lbaselib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lcode.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lcorolib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lctype.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldblib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldebug.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldo.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldump.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lfunc.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lgc.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\linit.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\liolib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\llex.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lmathlib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lmem.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\loadlib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lobject.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lopcodes.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\loslib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lparser.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lstate.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lstring.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lstrlib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ltable.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ltablib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ltm.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lundump.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lutf8lib.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lvm.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lzio.c">
+      <Filter>ThirdParty\Lua\src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -1202,6 +1307,15 @@
     <ClInclude Include="Source\Editor\FbxCache.h">
       <Filter>Source\Editor</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Slate\PreviewScene.h">
+      <Filter>Source\Slate</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Slate\SkelMeshPreviewScene.h">
+      <Filter>Source\Slate</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Editor\FbxImporter.h">
+      <Filter>Source\Editor</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shaders">
@@ -1335,6 +1449,9 @@
     </Filter>
     <Filter Include="ThirdParty\Lua\include">
       <UniqueIdentifier>{3ad57ef5-b375-4262-abe5-b3a5f8f9a886}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\Lua\src">
+      <UniqueIdentifier>{100999ff-621f-4ea2-b881-5fe2819d63ec}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

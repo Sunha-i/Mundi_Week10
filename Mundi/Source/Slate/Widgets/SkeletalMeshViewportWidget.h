@@ -44,6 +44,14 @@ private:
 	void UpdateGizmoVisibility();
 	void UpdateGizmoTransform();
 
+	// Bone picking
+	UBone* PickBoneFromViewport(const FVector2D& ViewportMousePos, const FVector2D& ViewportSize);
+	void CollectAllBones(UBone* Bone, TArray<UBone*>& OutBones);
+
+	// Picking thresholds
+	float GetJointPickRadius() const { return 0.05f; }		// Joint selection radius
+	float GetBoneLinePickThreshold() const { return 0.03f; }  // Bone line selection distance threshold
+
 public:
 	FName TargetMeshName{};
 	FSkeletalMeshPreviewScene WorldForPreviewManager;
@@ -82,4 +90,8 @@ private:
 	FVector2D DragStartMousePosition;
 	FVector DragImpactPoint;
 	FVector2D DragScreenVector;
+
+	// Performance optimization: throttle skeleton overlay updates during drag
+	int OverlayUpdateFrameCounter = 0;
+	const int OVERLAY_UPDATE_INTERVAL = 5;  // Update every 5 frames during drag
 };

@@ -105,7 +105,8 @@ void UPointLightComponent::OnRegister(UWorld* InWorld)
 
 void UPointLightComponent::OnUnregister()
 {
-	GWorld->GetLightManager()->DeRegisterLight(this);
+	UWorld* MyWorld = GetWorld();
+	if (MyWorld) MyWorld->GetLightManager()->DeRegisterLight(this);
 
 	Super::OnUnregister();
 }

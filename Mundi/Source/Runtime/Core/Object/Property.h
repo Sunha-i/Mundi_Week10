@@ -22,6 +22,8 @@ enum class EPropertyType : uint8
 	ScriptFile,
 	Sound,
 	Curve,
+	FTransform,		// FTransform 타입
+	FMatrix,		// FMatrix 타입 (SIMD 데이터)
 	// 추후 추가될 프로퍼티들은 직접 해줘야함.
 	Count			// 요소 개수, 항상 마지막!
 };

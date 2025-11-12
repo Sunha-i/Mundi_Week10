@@ -27,6 +27,10 @@ struct TPropertyTypeTraits
 			return EPropertyType::FString;
 		else if constexpr (std::is_same_v<T, FName>)
 			return EPropertyType::FName;
+		else if constexpr (std::is_same_v<T, FTransform>)
+			return EPropertyType::FTransform;
+		else if constexpr (std::is_same_v<T, FMatrix>)
+			return EPropertyType::FMatrix;
 		else if constexpr (std::is_pointer_v<T>)
 			return EPropertyType::ObjectPtr;  // UObject* 및 파생 타입
 		else if constexpr (std::is_same_v<T, UTexture>)
