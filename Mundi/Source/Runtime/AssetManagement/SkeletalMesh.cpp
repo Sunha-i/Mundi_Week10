@@ -296,7 +296,8 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             const FMatrix& BoneMatrix = BoneMatrices[BoneIndex];
 
             // Position 변환 (동차 좌표 사용)
-            SkinnedPosition += (SrcVertex.Position * BoneMatrix) * Weight;
+            FVector TransformedPos = SrcVertex.Position * BoneMatrix;
+            SkinnedPosition += TransformedPos * Weight;
 
             // Normal 변환 (방향 벡터이므로 w=0)
             FVector TransformedNormal(

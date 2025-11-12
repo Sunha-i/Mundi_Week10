@@ -277,10 +277,44 @@ void FFbxImporter::ExtractVertexSkinningData(
 	int TotalVertexCount = InVertices.Num();
 	OutSkinnedVertices.resize(TotalVertexCount);
 
-	// 1. FNormalVertex 데이터를 FSkinnedVertex로 복사 (전체)
+	// 1. Skinning 데이터 확인 및 Mesh Transform 준비
+	int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
+	FbxAMatrix MeshTransformMatrix;
+	FbxSkin* Skin = nullptr;
+	int ClusterCount = 0;
+	FbxCluster* FirstCluster = nullptr;
+
+	if (SkinCount > 0)
+	{
+		Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
+		ClusterCount = Skin->GetClusterCount();
+		if (ClusterCount > 0)
+		{
+			FirstCluster = Skin->GetCluster(0);
+			if (FirstCluster)
+			{
+				FirstCluster->GetTransformMatrix(MeshTransformMatrix);
+			}
+		}
+	}
+
 	for (int i = 0; i < TotalVertexCount; i++)
 	{
-		OutSkinnedVertices[i].Position = InVertices[i].pos;
+		// 정점을 Mesh Local → Mesh World로 변환 (Bind Pose 기준)
+		if (FirstCluster)
+		{
+			FbxVector4 LocalPos(InVertices[i].pos.X, InVertices[i].pos.Y, InVertices[i].pos.Z);
+			FbxVector4 WorldPos = MeshTransformMatrix.MultT(LocalPos);
+			OutSkinnedVertices[i].Position = FVector(
+				static_cast<float>(WorldPos[0]),
+				static_cast<float>(WorldPos[1]),
+				static_cast<float>(WorldPos[2])) * FBXUtil::UnitScale;
+		}
+		else
+		{
+			OutSkinnedVertices[i].Position = InVertices[i].pos;
+		}
+
 		OutSkinnedVertices[i].Normal = InVertices[i].normal;
 		OutSkinnedVertices[i].UV = InVertices[i].tex;
 		OutSkinnedVertices[i].Tangent = InVertices[i].Tangent;
@@ -288,12 +322,8 @@ void FFbxImporter::ExtractVertexSkinningData(
 	}
 
 	// 2. Skinning 데이터가 없으면 기본값 유지
-	int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
 	if (SkinCount == 0)
 		return;
-
-	FbxSkin* Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
-	int ClusterCount = Skin->GetClusterCount();
 
 	// 3. BoneName -> UBone 역매핑 생성 (FbxCluster에서 이름으로 찾기 위함)
 	TMap<FString, UBone*> NameToBoneMap;
@@ -315,56 +345,7 @@ void FFbxImporter::ExtractVertexSkinningData(
 	TArray<FVertexBoneInfluence> ControlPointInfluences;
 	ControlPointInfluences.resize(ControlPointCount);
 
-	// 5-1. 먼저 모든 Cluster에서 World Bind Pose 추출 (순서 무관)
-	TMap<UBone*, FTransform> BoneWorldBindPoseMap;
-	for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ClusterIdx++)
-	{
-		FbxCluster* Cluster = Skin->GetCluster(ClusterIdx);
-		if (!Cluster || !Cluster->GetLink())
-			continue;
-
-		FString BoneName(Cluster->GetLink()->GetName());
-		UBone* const* FoundBone = NameToBoneMap.Find(BoneName);
-		if (!FoundBone || !*FoundBone)
-			continue;
-
-		// FBX Cluster에서 올바른 Bind Pose World Transform 추출
-		FbxAMatrix TransformLinkMatrix;
-		Cluster->GetTransformLinkMatrix(TransformLinkMatrix);
-		FTransform WorldBindPose = ConvertFbxTransform(TransformLinkMatrix);
-
-		BoneWorldBindPoseMap.Add(*FoundBone, WorldBindPose);
-	}
-
-	// 5-2. World Bind Pose를 Relative Bind Pose로 변환하여 Bone에 설정
-	for (const auto& Pair : BoneWorldBindPoseMap)
-	{
-		UBone* Bone = Pair.first;
-		const FTransform& WorldBindPose = Pair.second;
-
-		if (Bone->GetParent())
-		{
-			// Parent의 World Bind Pose를 찾아서 Relative로 변환
-			const FTransform* ParentWorldBindPose = BoneWorldBindPoseMap.Find(Bone->GetParent());
-			if (ParentWorldBindPose)
-			{
-				FTransform RelativeBindPose = WorldBindPose.GetRelativeTransform(*ParentWorldBindPose);
-				Bone->SetRelativeBindPoseTransform(RelativeBindPose);
-			}
-			else
-			{
-				// Parent 정보가 없으면 그대로 사용 (fallback)
-				Bone->SetRelativeBindPoseTransform(WorldBindPose);
-			}
-		}
-		else
-		{
-			// Root Bone은 World가 곧 Relative
-			Bone->SetRelativeBindPoseTransform(WorldBindPose);
-		}
-	}
-
-	// 5-3. 이제 가중치 수집
+	// 5. Cluster에서 가중치 수집
 	for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ClusterIdx++)
 	{
 		FbxCluster* Cluster = Skin->GetCluster(ClusterIdx);
@@ -381,6 +362,26 @@ void FFbxImporter::ExtractVertexSkinningData(
 			continue;
 
 		int32 BoneIdx = *BoneIdxPtr;
+		UBone* Bone = *FoundBone;
+
+		// Cluster에서 Bone의 Bind Pose World Transform 추출
+		FbxAMatrix TransformLinkMatrix;
+		Cluster->GetTransformLinkMatrix(TransformLinkMatrix);
+
+		// Bone의 Bind Pose를 Cluster 정보로 업데이트
+		FTransform ClusterBindPose = ConvertFbxTransform(TransformLinkMatrix);
+
+		// Parent 관계 고려하여 Relative로 변환
+		if (Bone->GetParent())
+		{
+			FTransform ParentWorldBind = Bone->GetParent()->GetWorldBindPose();
+			FTransform RelativeBind = ClusterBindPose.GetRelativeTransform(ParentWorldBind);
+			Bone->SetRelativeBindPoseTransform(RelativeBind);
+		}
+		else
+		{
+			Bone->SetRelativeBindPoseTransform(ClusterBindPose);
+		}
 
 		int* ControlPointIndices = Cluster->GetControlPointIndices();
 		double* Weights = Cluster->GetControlPointWeights();

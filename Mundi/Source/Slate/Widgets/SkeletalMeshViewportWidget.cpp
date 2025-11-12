@@ -140,6 +140,7 @@ void USkeletalMeshViewportWidget::RenderBoneHierarchyPanel(float Width, float He
 			return;
 		}
 
+
 		// SkeletalMeshActor 찾기
 		ASkeletalMeshActor* SkeletalMeshActor = nullptr;
 		for (AActor* Actor : PreviewWorld->GetActors())
@@ -231,7 +232,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		FViewportClient* ViewportClient = Viewport.GetViewportClient();
 		ID3D11Texture2D* RenderedTexture = nullptr;
 
-		// ImGui::Text("- ViewportClient: %s", ViewportClient ? "OK" : "NULL");
 
 		RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
 
