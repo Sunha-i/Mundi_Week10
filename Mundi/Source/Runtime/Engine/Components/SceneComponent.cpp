@@ -404,7 +404,11 @@ void USceneComponent::OnRegister(UWorld* InWorld)
 {
     Super::OnRegister(InWorld);
 
-    if (!std::strcmp(this->GetClass()->Name , USceneComponent::StaticClass()->Name) && !SpriteComponent && !InWorld->bPie)
+    // PreviewWorld나 PIE에서는 에디터 전용 빌보드 생성 안 함
+    if (!std::strcmp(this->GetClass()->Name , USceneComponent::StaticClass()->Name)
+        && !SpriteComponent
+        && !InWorld->bPie
+        && !InWorld->bIsPreviewWorld)
     {
         CREATE_EDITOR_COMPONENT(SpriteComponent, UBillboardComponent);
         SpriteComponent->SetTexture(GDataDir + "/UI/Icons/EmptyActor.dds");
