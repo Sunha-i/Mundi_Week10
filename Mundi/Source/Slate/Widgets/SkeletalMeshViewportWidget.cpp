@@ -708,6 +708,7 @@ void USkeletalMeshViewportWidget::UpdateGizmoVisibility()
 	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
 	if (!Gizmo)    return;
 
+	Gizmo->SetMode(CurrentGizmoMode);
 	bool bHasSelection = (SelectedBone != nullptr);
 	Gizmo->ApplyGizmoVisualState(bHasSelection, CurrentGizmoMode, HoveredGizmoAxis);
 }
