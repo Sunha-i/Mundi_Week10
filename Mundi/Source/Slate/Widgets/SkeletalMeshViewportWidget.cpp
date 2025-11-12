@@ -92,6 +92,9 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	PreviewActor = SkeletalMeshActor;
 	MarkSkeletonOverlayDirty();
 	UpdateGizmoVisibility();
+
+	// Mark bone list as dirty when skeleton changes
+	bBoneListDirty = true;
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -201,7 +204,8 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 	{
 		SelectedBone = Bone;
 		MarkSkeletonOverlayDirty(); // 선택 변경 시 스켈레톤 오버레이 다시 그리기
-		UpdateGizmoTransform();
+		UpdateGizmoVisibility();  // Gizmo 표시
+		UpdateGizmoTransform();   // Gizmo 위치 업데이트
 	}
 
 	// 자식이 있으면 재귀적으로 렌더링
@@ -249,11 +253,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 		ImGui::Separator();
 
-		if (bShowSkeletonOverlay)
-		{
-			UpdateSkeletonOverlayIfNeeded();
-		}
-
 		// +-+-+ Dynamic Resizing +-+-+
 		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 		float newWidth = viewportPanelSize.x;
@@ -269,8 +268,16 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 		FViewportClient* ViewportClient = Viewport.GetViewportClient();
 
+		// OPTIMIZATION: Render gizmo first, then update skeleton overlay
+		// This prevents blocking gizmo rendering while BuildSkeletonOverlay is executing
 		ID3D11Texture2D* RenderedTexture = nullptr;
 		RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
+
+		// Update skeleton overlay after rendering (will be applied next frame)
+		if (bShowSkeletonOverlay)
+		{
+			UpdateSkeletonOverlayIfNeeded();
+		}
 
 		D3D11RHI* RHI = URenderManager::GetInstance().GetRenderer()->GetRHIDevice();
 
@@ -784,9 +791,11 @@ UBone* USkeletalMeshViewportWidget::PickBoneFromViewport(const FVector2D& Viewpo
 	FRay Ray = MakeRayFromViewport(View, Proj, CameraWorldPos, CameraRight, CameraUp, CameraForward,
 		ViewportMousePos, ViewportSize, FVector2D(0, 0));
 
-	// Collect all bones
-	TArray<UBone*> AllBones;
-	CollectAllBones(Skeleton->GetRoot(), AllBones);
+	// Update cached bone list if dirty
+	UpdateBoneListCache();
+
+	// Use cached bone list
+	const TArray<UBone*>& AllBones = CachedAllBones;
 
 	UBone* ClosestBone = nullptr;
 	float ClosestDistance = 1e9f;
@@ -839,6 +848,46 @@ void USkeletalMeshViewportWidget::CollectAllBones(UBone* Bone, TArray<UBone*>& O
 	{
 		CollectAllBones(Child, OutBones);
 	}
+}
+
+void USkeletalMeshViewportWidget::UpdateBoneListCache()
+{
+	// Only update if dirty
+	if (!bBoneListDirty)
+		return;
+
+	// Get skeleton
+	ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
+	if (!SkelActor)
+	{
+		CachedAllBones.clear();
+		bBoneListDirty = false;
+		return;
+	}
+
+	USkeletalMeshComponent* SkelMeshComp = SkelActor->GetSkeletalMeshComponent();
+	if (!SkelMeshComp)
+	{
+		CachedAllBones.clear();
+		bBoneListDirty = false;
+		return;
+	}
+
+	USkeletalMesh* SkeletalMesh = SkelMeshComp->GetSkeletalMesh();
+	FSkeletalMesh* MeshAsset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+	USkeleton* Skeleton = MeshAsset ? MeshAsset->Skeleton : nullptr;
+
+	if (!Skeleton || !Skeleton->GetRoot())
+	{
+		CachedAllBones.clear();
+		bBoneListDirty = false;
+		return;
+	}
+
+	// Rebuild cached bone list
+	CachedAllBones.clear();
+	CollectAllBones(Skeleton->GetRoot(), CachedAllBones);
+	bBoneListDirty = false;
 }
 
 bool USkeletalMeshViewportWidget::HasLoadedSkeletalMesh() const

@@ -47,6 +47,7 @@ private:
 	// Bone picking
 	UBone* PickBoneFromViewport(const FVector2D& ViewportMousePos, const FVector2D& ViewportSize);
 	void CollectAllBones(UBone* Bone, TArray<UBone*>& OutBones);
+	void UpdateBoneListCache();  // Update cached bone list when skeleton changes
 
 	// Picking thresholds
 	float GetJointPickRadius() const { return 0.05f; }		// Joint selection radius
@@ -94,4 +95,8 @@ private:
 	// Performance optimization: throttle skeleton overlay updates during drag
 	int OverlayUpdateFrameCounter = 0;
 	const int OVERLAY_UPDATE_INTERVAL = 5;  // Update every 5 frames during drag
+
+	// Bone picking optimization: cached bone list
+	TArray<UBone*> CachedAllBones;
+	bool bBoneListDirty = true;
 };
