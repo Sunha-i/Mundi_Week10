@@ -181,7 +181,7 @@ FTransform UBone::GetWorldBindPose() const
 }
 
 // BindPos와 현 Transform의 차이를 반환
-FTransform UBone::GetBoneOffset()
+FMatrix UBone::GetBoneOffset()
 {
     // 올바른 Skinning Transform 계산:
     // SkinningMatrix = CurrentWorldMatrix * Inverse(BindPoseWorldMatrix)
@@ -198,7 +198,7 @@ FTransform UBone::GetBoneOffset()
     // 다시 FTransform으로 변환할 필요 없이 행렬 자체를 반환하면 좋겠지만
     // 반환 타입이 FTransform이므로 임시로 identity 반환
     // (실제로는 GetSkinningMatrix를 직접 사용하는 것이 더 효율적)
-    return FTransform();
+    return BoneOffsetMatrix;
 }
 
 FMatrix UBone::GetSkinningMatrix()
@@ -209,32 +209,6 @@ FMatrix UBone::GetSkinningMatrix()
 
     FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
     FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
-
-    #ifdef _DEBUG
-    // 초기 상태 검증: Relative == BindPose면 Skinning Matrix는 Identity여야 함
-    static bool bFirstCheck = true;
-    if (bFirstCheck && !Parent)  // Root Bone만 체크
-    {
-        bFirstCheck = false;
-        FTransform Diff = RelativeTransform.GetRelativeTransform(BindPose);
-        float LocDist = Diff.Translation.Size();
-        if (LocDist < 0.01f)
-        {
-            // Bind Pose와 같으면 Identity 확인
-            FMatrix Result = CurrentWorldMatrix * InverseBindPoseMatrix;
-            FMatrix Identity = FMatrix::Identity();
-            bool bIsIdentity =
-                FMath::Abs(Result.M[0][0] - 1.0f) < 0.01f &&
-                FMath::Abs(Result.M[1][1] - 1.0f) < 0.01f &&
-                FMath::Abs(Result.M[2][2] - 1.0f) < 0.01f &&
-                FMath::Abs(Result.M[3][3] - 1.0f) < 0.01f;
-            if (!bIsIdentity)
-            {
-                OutputDebugStringA("WARNING: Skinning Matrix is NOT Identity at Bind Pose!\n");
-            }
-        }
-    }
-    #endif
 
     return CurrentWorldMatrix * InverseBindPoseMatrix;
 }

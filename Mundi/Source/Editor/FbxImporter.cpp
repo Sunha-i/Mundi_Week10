@@ -272,50 +272,40 @@ void FFbxImporter::ExtractVertexSkinningData(
 	const TMap<UBone*, int32>& BoneToIndexMap,
 	const TArray<FNormalVertex>& InVertices,
 	const TArray<int32>& VertexToControlPointMap,
-	int32 VertexOffset)
+	int32 VertexOffset,
+	const FTransform& MeshWorldTransform)
 {
 	int TotalVertexCount = InVertices.Num();
 	OutSkinnedVertices.resize(TotalVertexCount);
 
-	// 1. Skinning 데이터 확인 및 Mesh Transform 준비
+	// 1. Skinning 데이터 확인
 	int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
-	FbxAMatrix MeshTransformMatrix;
 	FbxSkin* Skin = nullptr;
 	int ClusterCount = 0;
-	FbxCluster* FirstCluster = nullptr;
 
 	if (SkinCount > 0)
 	{
 		Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
 		ClusterCount = Skin->GetClusterCount();
-		if (ClusterCount > 0)
-		{
-			FirstCluster = Skin->GetCluster(0);
-			if (FirstCluster)
-			{
-				FirstCluster->GetTransformMatrix(MeshTransformMatrix);
-			}
-		}
 	}
+
+	// BindPose 정점 데이터를 World 좌표계로 변환
+	// InVertices는 Mesh Local → Mesh World로 변환하여 Bind Pose World 좌표 저장
+	FMatrix MeshWorldMatrix = MeshWorldTransform.ToMatrix();
 
 	for (int i = 0; i < TotalVertexCount; i++)
 	{
-		// 정점을 Mesh Local → Mesh World로 변환 (Bind Pose 기준)
-		if (FirstCluster)
-		{
-			FbxVector4 LocalPos(InVertices[i].pos.X, InVertices[i].pos.Y, InVertices[i].pos.Z);
-			FbxVector4 WorldPos = MeshTransformMatrix.MultT(LocalPos);
-			OutSkinnedVertices[i].Position = FVector(
-				static_cast<float>(WorldPos[0]),
-				static_cast<float>(WorldPos[1]),
-				static_cast<float>(WorldPos[2])) * FBXUtil::UnitScale;
-		}
-		else
-		{
-			OutSkinnedVertices[i].Position = InVertices[i].pos;
-		}
+		// Position을 World 좌표계로 변환 (Bind Pose 시점의 World 좌표)
+		OutSkinnedVertices[i].Position = InVertices[i].pos * MeshWorldMatrix;
 
-		OutSkinnedVertices[i].Normal = InVertices[i].normal;
+		// Normal도 World 좌표계로 변환 (방향 벡터이므로 이동은 무시)
+		FVector TransformedNormal(
+			InVertices[i].normal.X * MeshWorldMatrix.M[0][0] + InVertices[i].normal.Y * MeshWorldMatrix.M[1][0] + InVertices[i].normal.Z * MeshWorldMatrix.M[2][0],
+			InVertices[i].normal.X * MeshWorldMatrix.M[0][1] + InVertices[i].normal.Y * MeshWorldMatrix.M[1][1] + InVertices[i].normal.Z * MeshWorldMatrix.M[2][1],
+			InVertices[i].normal.X * MeshWorldMatrix.M[0][2] + InVertices[i].normal.Y * MeshWorldMatrix.M[1][2] + InVertices[i].normal.Z * MeshWorldMatrix.M[2][2]
+		);
+		OutSkinnedVertices[i].Normal = TransformedNormal.GetNormalized();
+
 		OutSkinnedVertices[i].UV = InVertices[i].tex;
 		OutSkinnedVertices[i].Tangent = InVertices[i].Tangent;
 		OutSkinnedVertices[i].Color = InVertices[i].color;
@@ -335,6 +325,10 @@ void FFbxImporter::ExtractVertexSkinningData(
 			NameToBoneMap.Add(Bone->GetName().ToString(), Bone);
 		}
 	}
+
+	// BindPose는 ProcessSkeletonNode에서 설정한 값을 그대로 사용
+	// Cluster의 TransformLinkMatrix는 좌표계 변환 전 데이터이므로 사용하지 않음
+	// (DeepConvertScene은 Node만 변환하고, Cluster Matrix는 변환하지 않음)
 
 	// 4. ControlPoint별 본 영향 정보 저장 (FBX 원본 정점)
 	int ControlPointCount = InMesh->GetControlPointsCount();
@@ -364,24 +358,7 @@ void FFbxImporter::ExtractVertexSkinningData(
 		int32 BoneIdx = *BoneIdxPtr;
 		UBone* Bone = *FoundBone;
 
-		// Cluster에서 Bone의 Bind Pose World Transform 추출
-		FbxAMatrix TransformLinkMatrix;
-		Cluster->GetTransformLinkMatrix(TransformLinkMatrix);
-
-		// Bone의 Bind Pose를 Cluster 정보로 업데이트
-		FTransform ClusterBindPose = ConvertFbxTransform(TransformLinkMatrix);
-
-		// Parent 관계 고려하여 Relative로 변환
-		if (Bone->GetParent())
-		{
-			FTransform ParentWorldBind = Bone->GetParent()->GetWorldBindPose();
-			FTransform RelativeBind = ClusterBindPose.GetRelativeTransform(ParentWorldBind);
-			Bone->SetRelativeBindPoseTransform(RelativeBind);
-		}
-		else
-		{
-			Bone->SetRelativeBindPoseTransform(ClusterBindPose);
-		}
+		// BindPose는 위에서 이미 계층구조 순서대로 업데이트됨 (3-2 단계)
 
 		int* ControlPointIndices = Cluster->GetControlPointIndices();
 		double* Weights = Cluster->GetControlPointWeights();
@@ -571,6 +548,32 @@ void FFbxImporter::ProcessMeshNode(
 		FbxMesh* Mesh = InNode->GetMesh();
 		if (Mesh)
 		{
+			// Mesh Node의 World Transform 얻기 (Bind Pose 시점)
+			FbxAMatrix MeshNodeWorldTransform = InNode->EvaluateGlobalTransform();
+
+			// Skeleton Root의 World Bind Pose Transform 얻기
+			UBone* RootBone = OutSkeletalMesh->Skeleton ? OutSkeletalMesh->Skeleton->GetRoot() : nullptr;
+			FTransform RootBindWorld;
+			if (RootBone)
+			{
+				RootBindWorld = RootBone->GetWorldBindPose();
+			}
+
+			// Mesh Local → Skeleton Root Local 변환 행렬 계산
+			// RootSpace = RootBindWorld^(-1) * MeshNodeWorld
+			FTransform MeshWorldTransform = ConvertFbxTransform(MeshNodeWorldTransform);
+			FTransform MeshToRootTransform;
+			if (RootBone)
+			{
+				// GetRelativeTransform: MeshWorld를 RootBindWorld의 Local 좌표계로 변환
+				// = Inv(RootBindWorld) * MeshWorldTransform
+				MeshToRootTransform = RootBindWorld.GetRelativeTransform(MeshWorldTransform);
+			}
+			else
+			{
+				MeshToRootTransform = MeshWorldTransform;
+			}
+
 			// Skeleton으로부터 BoneToIndexMap 생성 (ForEachBone 순서대로)
 			TMap<UBone*, int32> BoneToIndexMap;
 			if (OutSkeletalMesh->Skeleton)
@@ -627,9 +630,9 @@ void FFbxImporter::ProcessMeshNode(
 				}
 			}
 
-			// CPU Skinning용 정점별 스키닝 데이터 추출 (BoneToIndexMap 전달)
+			// CPU Skinning용 정점별 스키닝 데이터 추출 (BoneToIndexMap, MeshWorldTransform 전달)
 			ExtractVertexSkinningData(Mesh, OutSkeletalMesh->SkinnedVertices, BoneToIndexMap,
-				OutSkeletalMesh->Vertices, VertexToControlPointMap, static_cast<int32>(VertexCountBefore));
+				OutSkeletalMesh->Vertices, VertexToControlPointMap, static_cast<int32>(VertexCountBefore), MeshWorldTransform);
 		}
 	}
 	//  자식 노드 재귀 처리

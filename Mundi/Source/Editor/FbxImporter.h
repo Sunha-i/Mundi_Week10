@@ -84,7 +84,8 @@ public:
 		const TMap<UBone*, int32>& BoneToIndexMap,  // Bone -> Index 매핑 (ForEachBone 순서)
 		const TArray<struct FNormalVertex>& InVertices,
 		const TArray<int32>& VertexToControlPointMap,  // 각 정점이 어떤 ControlPoint에서 왔는지
-		int32 VertexOffset  // 이 메시의 시작 정점 인덱스
+		int32 VertexOffset,  // 이 메시의 시작 정점 인덱스
+		const FTransform& MeshWorldTransform  // Mesh World Transform (Bind Pose)
 	);
 
 	// =======================
