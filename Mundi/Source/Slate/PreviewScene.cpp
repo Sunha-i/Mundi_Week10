@@ -12,7 +12,7 @@ void FPreviewScene::CreateWorldForPreviewScene()
         WorldForPreview->bIsPreviewWorld = true;
 
         // Preview Scene에서는 빌보드 렌더링도 비활성화
-        WorldForPreview->GetRenderSettings().DisableShowFlag(EEngineShowFlags::SF_Billboard);
+        //WorldForPreview->GetRenderSettings().DisableShowFlag(EEngineShowFlags::SF_Billboard);
     }
 }
 

@@ -1,6 +1,6 @@
 {
   "Actors" : {
-    "1903" : {
+    "1908" : {
       "ObjectName" : "ADirectionalLightActor_2",
       "OwnedComponents" : [{
           "CascadedAreaColorDebugValue" : 0.000000,
@@ -8,7 +8,7 @@
           "CascadedCount" : 4,
           "CascadedLinearBlendingValue" : 0.500000,
           "CascadedOverlapValue" : 0.200000,
-          "Id" : 1905,
+          "Id" : 1910,
           "Intensity" : 1.000000,
           "LightColor" : [1.000000, 1.000000, 1.000000, 1.000000],
           "ObjectName" : "UDirectionalLightComponent_3",
@@ -30,16 +30,16 @@
           "bOverrideCameraLightPerspective" : false,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1905,
+      "RootComponentId" : 1910,
       "Tag" : "",
       "Type" : "ADirectionalLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1906" : {
+    "1911" : {
       "ObjectName" : "AAmbientLightActor_2",
       "OwnedComponents" : [{
-          "Id" : 1908,
+          "Id" : 1913,
           "Intensity" : 0.100000,
           "LightColor" : [1.000000, 1.000000, 1.000000, 1.000000],
           "ObjectName" : "UAmbientLightComponent_3",
@@ -59,16 +59,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1908,
+      "RootComponentId" : 1913,
       "Tag" : "",
       "Type" : "AAmbientLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1909" : {
+    "1914" : {
       "ObjectName" : "AStaticMeshActor_1",
       "OwnedComponents" : [{
-          "Id" : 1911,
+          "Id" : 1916,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -87,16 +87,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1911,
+      "RootComponentId" : 1916,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1912" : {
+    "1917" : {
       "ObjectName" : "AStaticMeshActor_2",
       "OwnedComponents" : [{
-          "Id" : 1914,
+          "Id" : 1919,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -115,16 +115,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1914,
+      "RootComponentId" : 1919,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1915" : {
+    "1920" : {
       "ObjectName" : "AStaticMeshActor_3",
       "OwnedComponents" : [{
-          "Id" : 1917,
+          "Id" : 1922,
           "MaterialSlots" : [{
               "AssetPath" : "M18_Smoke",
               "Type" : "UMaterial"
@@ -143,18 +143,18 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1917,
+      "RootComponentId" : 1922,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1918" : {
+    "1923" : {
       "ObjectName" : "APointLightActor_1",
       "OwnedComponents" : [{
           "AttenuationRadius" : 31.250000,
           "FalloffExponent" : 2.000000,
-          "Id" : 1920,
+          "Id" : 1925,
           "Intensity" : 1.000000,
           "LightColor" : [0.849421, 0.137744, 0.137744, 1.000000],
           "ObjectName" : "UPointLightComponent_2",
@@ -178,16 +178,16 @@
           "bTickEnabled" : true,
           "bUseInverseSquareFalloff" : false
         }],
-      "RootComponentId" : 1920,
+      "RootComponentId" : 1925,
       "Tag" : "",
       "Type" : "APointLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1921" : {
+    "1926" : {
       "ObjectName" : "AStaticMeshActor_4",
       "OwnedComponents" : [{
-          "Id" : 1923,
+          "Id" : 1928,
           "MaterialSlots" : [{
               "AssetPath" : "MatID_1.001",
               "Type" : "UMaterial"
@@ -206,16 +206,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1923,
+      "RootComponentId" : 1928,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1924" : {
+    "1929" : {
       "ObjectName" : "AStaticMeshActor_5",
       "OwnedComponents" : [{
-          "Id" : 1926,
+          "Id" : 1931,
           "MaterialSlots" : [{
               "AssetPath" : "EYES",
               "Type" : "UMaterial"
@@ -243,16 +243,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1926,
+      "RootComponentId" : 1931,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1927" : {
+    "1932" : {
       "ObjectName" : "AStaticMeshActor_6",
       "OwnedComponents" : [{
-          "Id" : 1929,
+          "Id" : 1934,
           "MaterialSlots" : [{
               "AssetPath" : "MatID_1",
               "Type" : "UMaterial"
@@ -271,16 +271,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1929,
+      "RootComponentId" : 1934,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1930" : {
+    "1935" : {
       "ObjectName" : "AStaticMeshActor_7",
       "OwnedComponents" : [{
-          "Id" : 1932,
+          "Id" : 1937,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -299,16 +299,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1932,
+      "RootComponentId" : 1937,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1933" : {
+    "1938" : {
       "ObjectName" : "AStaticMeshActor_8",
       "OwnedComponents" : [{
-          "Id" : 1935,
+          "Id" : 1940,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -327,16 +327,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1935,
+      "RootComponentId" : 1940,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1936" : {
+    "1941" : {
       "ObjectName" : "AStaticMeshActor_9",
       "OwnedComponents" : [{
-          "Id" : 1938,
+          "Id" : 1943,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -355,16 +355,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1938,
+      "RootComponentId" : 1943,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1939" : {
+    "1944" : {
       "ObjectName" : "AStaticMeshActor_10",
       "OwnedComponents" : [{
-          "Id" : 1941,
+          "Id" : 1946,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -383,16 +383,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1941,
+      "RootComponentId" : 1946,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1942" : {
+    "1947" : {
       "ObjectName" : "AStaticMeshActor_11",
       "OwnedComponents" : [{
-          "Id" : 1944,
+          "Id" : 1949,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -411,16 +411,16 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1944,
+      "RootComponentId" : 1949,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1945" : {
+    "1950" : {
       "ObjectName" : "AStaticMeshActor_12",
       "OwnedComponents" : [{
-          "Id" : 1947,
+          "Id" : 1952,
           "MaterialSlots" : [{
               "AssetPath" : "texture",
               "Type" : "UMaterial"
@@ -439,18 +439,18 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1947,
+      "RootComponentId" : 1952,
       "Tag" : "",
       "Type" : "AStaticMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1948" : {
+    "1953" : {
       "ObjectName" : "APointLightActor_2",
       "OwnedComponents" : [{
           "AttenuationRadius" : 9.020000,
           "FalloffExponent" : 2.000000,
-          "Id" : 1950,
+          "Id" : 1955,
           "Intensity" : 1.000000,
           "LightColor" : [0.052548, 0.139905, 0.544402, 1.000000],
           "ObjectName" : "UPointLightComponent_4",
@@ -474,18 +474,18 @@
           "bTickEnabled" : true,
           "bUseInverseSquareFalloff" : false
         }],
-      "RootComponentId" : 1950,
+      "RootComponentId" : 1955,
       "Tag" : "",
       "Type" : "APointLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1951" : {
+    "1956" : {
       "ObjectName" : "ASpotLightActor_1",
       "OwnedComponents" : [{
           "AttenuationRadius" : 17.770000,
           "FalloffExponent" : 2.000000,
-          "Id" : 1953,
+          "Id" : 1958,
           "InnerConeAngle" : 30.000000,
           "Intensity" : 1.000000,
           "LightColor" : [1.000000, 1.000000, 1.000000, 1.000000],
@@ -511,16 +511,16 @@
           "bTickEnabled" : true,
           "bUseInverseSquareFalloff" : false
         }],
-      "RootComponentId" : 1953,
+      "RootComponentId" : 1958,
       "Tag" : "",
       "Type" : "ASpotLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1954" : {
+    "1959" : {
       "ObjectName" : "APlayerCameraManager_2",
       "OwnedComponents" : [{
-          "Id" : 1955,
+          "Id" : 1960,
           "ObjectName" : "USceneComponent_3",
           "ParentId" : 0,
           "RelativeLocation" : [0.000000, 0.000000, 0.000000],
@@ -532,23 +532,35 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1955,
+      "RootComponentId" : 1960,
       "Tag" : "",
       "TransitionCurve" : [0.470000, 0.000000, 0.745000, 0.715000],
       "Type" : "APlayerCameraManager",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1956" : {
+    "1961" : {
       "ObjectName" : "액터_0",
       "OwnedComponents" : [{
-          "Id" : 1957,
+          "Id" : 1963,
+          "ObjectName" : "USceneComponent_4",
+          "ParentId" : 0,
+          "RelativeLocation" : [-22.093805, -17.062038, 41.686424],
+          "RelativeRotationEuler" : [0.000000, -0.000000, 103.129997],
+          "RelativeScale" : [1.000000, 1.000000, 1.000000],
+          "Type" : "USceneComponent",
+          "bHiddenInGame" : false,
+          "bIsActive" : true,
+          "bIsVisible" : true,
+          "bTickEnabled" : true
+        }, {
+          "Id" : 1962,
           "MaterialSlots" : [{
               "AssetPath" : "Ch46_body",
               "Type" : "UMaterial"
             }],
           "ObjectName" : "USkeletalMeshComponent_1",
-          "ParentId" : 1958,
+          "ParentId" : 1963,
           "RelativeLocation" : [0.000000, 0.049099, 0.000000],
           "RelativeRotationEuler" : [0.000000, -0.000000, 0.000000],
           "RelativeScale" : [1.000000, 1.000000, 1.000000],
@@ -560,29 +572,17 @@
           "bIsActive" : true,
           "bIsVisible" : true,
           "bTickEnabled" : true
-        }, {
-          "Id" : 1958,
-          "ObjectName" : "USceneComponent_4",
-          "ParentId" : 0,
-          "RelativeLocation" : [-22.093805, -17.062038, 41.686424],
-          "RelativeRotationEuler" : [0.000000, -0.000000, 103.129997],
-          "RelativeScale" : [1.000000, 1.000000, 1.000000],
-          "Type" : "USceneComponent",
-          "bHiddenInGame" : false,
-          "bIsActive" : true,
-          "bIsVisible" : true,
-          "bTickEnabled" : true
         }],
-      "RootComponentId" : 1958,
+      "RootComponentId" : 1963,
       "Tag" : "",
       "Type" : "AEmptyActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1959" : {
+    "1964" : {
       "ObjectName" : "액터_0",
       "OwnedComponents" : [{
-          "Id" : 1960,
+          "Id" : 1965,
           "MaterialSlots" : [{
               "Overrides" : {
                 "Scalars" : {
@@ -599,7 +599,7 @@
               "Type" : "UMaterialInstanceDynamic"
             }],
           "ObjectName" : "UStaticMeshComponent_25",
-          "ParentId" : 1962,
+          "ParentId" : 1967,
           "RelativeLocation" : [0.000000, 0.000000, 0.000000],
           "RelativeRotationEuler" : [0.000000, 0.000000, 0.000000],
           "RelativeScale" : [1.000000, 1.000000, 1.000000],
@@ -612,7 +612,7 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }, {
-          "Id" : 1962,
+          "Id" : 1967,
           "ObjectName" : "USceneComponent_5",
           "ParentId" : 0,
           "RelativeLocation" : [-21.008890, 43.778370, 168.682449],
@@ -624,14 +624,69 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1962,
+      "RootComponentId" : 1967,
+      "Tag" : "",
+      "Type" : "AEmptyActor",
+      "bActorHiddenInGame" : false,
+      "bActorIsActive" : true
+    },
+    "1985" : {
+      "ObjectName" : "액터_0",
+      "OwnedComponents" : [{
+          "Id" : 1986,
+          "ObjectName" : "USceneComponent_6",
+          "ParentId" : 0,
+          "RelativeLocation" : [-21.419395, -24.844524, 40.563869],
+          "RelativeRotationEuler" : [0.000000, -0.000000, 0.000000],
+          "RelativeScale" : [1.000000, 1.000000, 1.000000],
+          "Type" : "USceneComponent",
+          "bHiddenInGame" : false,
+          "bIsActive" : true,
+          "bIsVisible" : true,
+          "bTickEnabled" : true
+        }, {
+          "Id" : 1988,
+          "MaterialSlots" : [{
+              "AssetPath" : "MI_Quinn_01",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_02",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_01",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_02",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_01",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_02",
+              "Type" : "UMaterial"
+            }],
+          "ObjectName" : "USkeletalMeshComponent_2",
+          "ParentId" : 1986,
+          "RelativeLocation" : [0.000000, 0.000000, 0.000000],
+          "RelativeRotationEuler" : [0.000000, 0.000000, 0.000000],
+          "RelativeScale" : [1.000000, 1.000000, 1.000000],
+          "SkeletalMesh" : "Data/Fbx/test/SKM_Quinn_Simple.FBX",
+          "Type" : "USkeletalMeshComponent",
+          "bBlockComponent" : false,
+          "bGenerateOverlapEvents" : true,
+          "bHiddenInGame" : false,
+          "bIsActive" : true,
+          "bIsVisible" : true,
+          "bTickEnabled" : true
+        }],
+      "RootComponentId" : 1986,
       "Tag" : "",
       "Type" : "AEmptyActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     }
   },
-  "NextUUID" : 1980,
+  "NextUUID" : 2147,
   "PerspectiveCamera" : {
     "FOV" : [60.000000],
     "FarClip" : [1000.000000],
