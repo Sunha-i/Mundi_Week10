@@ -127,7 +127,13 @@ void USkeletalMeshViewportWidget::RenderWidget()
 
 void USkeletalMeshViewportWidget::RenderBoneHierarchyPanel(float Width, float Height)
 {
-	ImGui::BeginChild("BoneHierarchy", ImVec2(Width, Height), true);
+	ImGui::BeginChild
+	(
+		"BoneHierarchy",
+		ImVec2(Width, Height),
+		true,
+		ImGuiWindowFlags_HorizontalScrollbar
+	);
 	{
 		ImGui::Text("Bone Hierarchy");
 		ImGui::Separator();
