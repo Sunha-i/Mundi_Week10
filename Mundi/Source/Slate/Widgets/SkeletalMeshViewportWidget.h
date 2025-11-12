@@ -72,6 +72,7 @@ private:
 	EGizmoMode CurrentGizmoMode = EGizmoMode::Translate;
 
 	// GizmoInteractionStatus
+	bool bIsGizmoDragging = false;
 	uint32 HoveredGizmoAxis = 0;
 
 	// DragStartStatusInfo

@@ -313,6 +313,35 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 			// ImGui에 PreviewSRV 표시 (동적 크기)
 			ImGui::Image((void*)PreviewSRV, ImVec2(newWidth, newHeight));
 
+			// +-+-+ Gizmo Interaction Logic +-+-+
+			if (SelectedBone)
+			{
+				AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+				bool bIsViewportHovered = ImGui::IsItemHovered();
+
+				// 1. Hovering (Picking)
+				if (bIsViewportHovered && !bIsGizmoDragging)
+				{
+					ImVec2 Min = ImGui::GetItemRectMin();
+					ImVec2 Max = ImGui::GetItemRectSize();
+					ImVec2 MouseAbs = ImGui::GetMousePos();
+					FVector2D ViewportMousePos(MouseAbs.x - Min.x, MouseAbs.y - Min.y);
+					FVector2D ViewportSize(Max.x, Max.y);
+
+					HoveredGizmoAxis = CPickingSystem::IsHoveringGizmoForViewport(
+						Gizmo, PreviewCamera, ViewportMousePos, ViewportSize,
+						FVector2D(0, 0), &Viewport, DragImpactPoint
+					);
+
+					UE_LOG("Hovered Axis: %d", HoveredGizmoAxis);
+					UpdateGizmoVisibility();
+				}
+			}
+			else
+			{
+				HoveredGizmoAxis = 0;
+				UpdateGizmoVisibility();
+			}
 			// 1) 드래그 시작 조건: ImGui::Image 위에서 우클릭을 시작했을 때
 			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1))		// 1: MouseRight (Only process RT)
 			{
@@ -566,7 +595,8 @@ void USkeletalMeshViewportWidget::UpdateGizmoVisibility()
 	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
 	if (!Gizmo)    return;
 
-	Gizmo->ApplyGizmoVisualState(true, CurrentGizmoMode, HoveredGizmoAxis);
+	bool bHasSelection = (SelectedBone != nullptr);
+	Gizmo->ApplyGizmoVisualState(bHasSelection, CurrentGizmoMode, HoveredGizmoAxis);
 }
 
 void USkeletalMeshViewportWidget::UpdateGizmoTransform()
