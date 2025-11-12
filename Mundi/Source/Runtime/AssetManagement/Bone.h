@@ -54,6 +54,8 @@ public:
     FMatrix GetSkinningMatrix();
 
     void SetParent(UBone* InParent);
+    UBone* GetParent() { return Parent; }
+
     void AddChild(UBone* InChild);
     void RemoveChild(UBone* InChild);
     const TArray<UBone*>& GetChildren() const;

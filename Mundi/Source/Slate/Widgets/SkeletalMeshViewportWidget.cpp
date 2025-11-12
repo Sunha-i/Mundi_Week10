@@ -336,12 +336,90 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 					UE_LOG("Hovered Axis: %d", HoveredGizmoAxis);
 					UpdateGizmoVisibility();
 				}
+
+				// 2. Drag Start
+				if (bIsViewportHovered && HoveredGizmoAxis > 0 && ImGui::IsMouseClicked(0))
+				{
+					bIsGizmoDragging = true;
+					DraggingGizmoAxis = HoveredGizmoAxis;
+					DragStartMousePosition = FVector2D(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
+					DragStartBoneTransfrom = SelectedBone->GetWorldTransform();
+
+					if (CurrentGizmoMode == EGizmoMode::Rotate)
+					{
+						// AGizmoActor::ProcessGizmoDragging logic
+						FVector WorldAxis(0.f), LocalAxisVector(0.f);
+						switch (DraggingGizmoAxis) {
+						case 1: LocalAxisVector = FVector(1, 0, 0); break;
+						case 2: LocalAxisVector = FVector(0, 1, 0); break;
+						case 3: LocalAxisVector = FVector(0, 0, 1); break;
+						}
+
+						if (CurrentGizmoSpace == EGizmoSpace::World)
+						{
+							WorldAxis = LocalAxisVector;
+						}
+						else if (CurrentGizmoSpace == EGizmoSpace::Local)
+						{
+							WorldAxis = DragStartBoneTransfrom.Rotation.RotateVector(LocalAxisVector);
+						}
+
+						FVector ClickVector = DragImpactPoint - DragStartBoneTransfrom.Translation;
+						FVector Tangent3D = FVector::Cross(WorldAxis, ClickVector);
+						float RightDot = FVector::Dot(Tangent3D, PreviewCamera->GetRight());
+						float UpDot = FVector::Dot(Tangent3D, PreviewCamera->GetUp());
+						DragScreenVector = FVector2D(RightDot, -UpDot);
+						DragScreenVector = DragScreenVector.GetNormalized();
+					}
+				}
 			}
 			else
 			{
 				HoveredGizmoAxis = 0;
 				UpdateGizmoVisibility();
 			}
+
+			// 3. Drag Continue & End
+			if (bIsGizmoDragging)
+			{
+				if (ImGui::IsMouseDown(0))
+				{
+					FVector2D CurrentMousePosition(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
+					FVector2D MouseOffset = CurrentMousePosition - DragStartMousePosition;
+
+					AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+					FTransform NewWorldTransform = Gizmo->CalculateDragTransform(
+						DragStartBoneTransfrom, MouseOffset, PreviewCamera, &Viewport,
+					    CurrentGizmoMode, CurrentGizmoSpace, DraggingGizmoAxis, DragScreenVector
+					);
+
+					// Get the parent bone's world transform
+					FTransform ParentWorldTransform;
+					if (UBone* ParentBone = SelectedBone->GetParent())
+					{
+						ParentWorldTransform = ParentBone->GetWorldTransform();
+					}
+					else if (ASkeletalMeshActor * SkelActor = GetPreviewActor())
+					{
+						if (USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent())
+						{
+							ParentWorldTransform = MeshComp->GetWorldTransform();
+						}
+					}
+
+					FTransform NewRelativeTransform = ParentWorldTransform.GetRelativeTransform(NewWorldTransform);
+					SelectedBone->SetRelativeTransform(NewRelativeTransform);
+					UpdateGizmoTransform();
+				}
+
+				if (ImGui::IsMouseReleased(0))
+				{
+					bIsGizmoDragging = false;
+					DraggingGizmoAxis = 0;
+					UpdateGizmoVisibility();
+				}
+			}
+
 			// 1) 드래그 시작 조건: ImGui::Image 위에서 우클릭을 시작했을 때
 			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1))		// 1: MouseRight (Only process RT)
 			{

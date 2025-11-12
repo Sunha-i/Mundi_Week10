@@ -70,11 +70,16 @@ private:
 	// SelectedInfo
 	class UBone* SelectedBone = nullptr;
 	EGizmoMode CurrentGizmoMode = EGizmoMode::Translate;
+	EGizmoSpace CurrentGizmoSpace = EGizmoSpace::Local;
 
 	// GizmoInteractionStatus
 	bool bIsGizmoDragging = false;
 	uint32 HoveredGizmoAxis = 0;
+	uint32 DraggingGizmoAxis = 0;
 
 	// DragStartStatusInfo
+	FTransform DragStartBoneTransfrom;
+	FVector2D DragStartMousePosition;
 	FVector DragImpactPoint;
+	FVector2D DragScreenVector;
 };
