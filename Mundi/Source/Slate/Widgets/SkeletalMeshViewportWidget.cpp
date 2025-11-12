@@ -58,19 +58,7 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 
 USkeletalMeshViewportWidget::~USkeletalMeshViewportWidget()
 {
-	ClearSkeletonOverlay(true);
-	if (PreviewActor)
-	{
-		if (UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview())
-		{
-			PreviewWorld->RemoveEditorActor(PreviewActor);
-		}
-		PreviewActor->Destroy();
-		PreviewActor = nullptr;
-	}
-
 	ReleasePreviewRenderTarget();
-	WorldForPreviewManager.DestroyWorldForPreviewScene();
 
 	// FViewportClient는 일반 C++ 클래스이므로 delete 사용
 	delete Viewport.GetViewportClient();
