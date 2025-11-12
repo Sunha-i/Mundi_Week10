@@ -10,6 +10,7 @@ public:
 	USkeletalMeshViewerWindow();
 
 	void Initialize() override;
+	void Cleanup() override;
 
 public:
 	FUIWindowConfig InitConfig;
