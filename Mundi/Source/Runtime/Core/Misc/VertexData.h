@@ -110,15 +110,15 @@ struct FBillboardVertex
 struct FSkinnedVertex : public FVertexDynamic
 {
     // Skinning 데이터 (최대 4개의 본 영향)
-    uint32 BoneIndices[4];      // 영향을 주는 본의 인덱스
-    float BoneWeights[4];       // 각 본의 가중치 (합=1.0)
+    class UBone* BonePointers[4];   // 영향을 주는 본의 포인터 (직접 참조)
+    float BoneWeights[4];            // 각 본의 가중치 (합=1.0)
 
     FSkinnedVertex()
         : FVertexDynamic()
     {
         for (int i = 0; i < 4; i++)
         {
-            BoneIndices[i] = 0;
+            BonePointers[i] = nullptr;
             BoneWeights[i] = 0.0f;
         }
     }

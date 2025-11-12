@@ -33,10 +33,10 @@ void USkeletalMesh::Load(
     FSkeletalMesh* LoadedMesh = FbxManager.LoadFbxSkeletalMeshAsset(InFilePath);
 
     // 빈 버텍스, 인덱스로 버퍼 생성 방지
-    if (LoadedMesh/* &&
+    if (LoadedMesh &&
         0 < LoadedMesh->Vertices.size() &&
         0 < LoadedMesh->Indices.size()
-    */)
+    )
     {
         // 복사 생성자로 Bone, Flesh의 정보를 깊은 복사하여야 함.
         SkeletalMeshAsset = new FSkeletalMesh(*LoadedMesh);
@@ -52,7 +52,7 @@ void USkeletalMesh::Load(
     }
     else
     {
-        MessageBoxA(nullptr, "What the hell\n", "Error", 0);
+        MessageBoxA(nullptr, "[USkeletalMesh::Load] Warning : None Loaded Mesh\n", "Error", 0);
     }
 }
 
@@ -223,38 +223,19 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
         if (Bone) BoneCount++;
     });
 
-    // 정점의 최대 BoneIndex 검증
-    #ifdef _DEBUG
-    for (int i = 0; i < VertexCount; i++)
-    {
-        for (int j = 0; j < 4; j++)
-        {
-            if (SkinnedVerts[i].BoneWeights[j] > 0.0001f)
-            {
-                uint32 BoneIdx = SkinnedVerts[i].BoneIndices[j];
-                if (BoneIdx >= (uint32)BoneCount)
-                {
-                    OutputDebugStringA(std::format("ERROR: Vertex {} BoneIndex[{}]={} >= BoneCount={}\n",
-                        i, j, BoneIdx, BoneCount).c_str());
-                }
-            }
-        }
-    }
-    #endif
-
-    TArray<FMatrix> BoneMatrices;
-    BoneMatrices.resize(BoneCount);
+    // TArray<FMatrix> BoneMatrices;
+    // BoneMatrices.resize(BoneCount);
 
     // 각 Bone의 인덱스에 맞춰 매트릭스 저장
-    int32 BoneIndex = 0;
-    SkeletalMeshAsset->Skeleton->ForEachBone([&](UBone* Bone)
-    {
-        if (Bone && BoneIndex < BoneCount)
-        {
-            BoneMatrices[BoneIndex] = Bone->GetSkinningMatrix();
-            BoneIndex++;
-        }
-    });
+    // int32 BoneIndex = 0;
+    // SkeletalMeshAsset->Skeleton->ForEachBone([&](UBone* Bone)
+    // {
+    //     if (Bone && BoneIndex < BoneCount)
+    //     {
+    //         BoneMatrices[BoneIndex] = Bone->GetSkinningMatrix();
+    //         BoneIndex++;
+    //     }
+    // });
 
     // 3. 각 정점마다 CPU Skinning 수행
     for (int i = 0; i < VertexCount; i++)
@@ -289,22 +270,38 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             if (Weight <= 0.0001f)
                 continue;
 
-            uint32 BoneIndex = SrcVertex.BoneIndices[j];
-            if (BoneIndex >= (uint32)BoneMatrices.Num())
-                continue;
-
-            const FMatrix& BoneMatrix = BoneMatrices[BoneIndex];
+            // uint32 BoneIndex = SrcVertex.BoneIndices[j];
+            // if (BoneIndex >= (uint32)BoneMatrices.Num())
+            //     continue;
+            //
+            // const FMatrix& BoneMatrix = BoneMatrices[BoneIndex];
 
             // Position 변환 (동차 좌표 사용)
-            FVector TransformedPos = SrcVertex.Position * BoneMatrix;
+
+            // === Position 변환 ===
+            // 1. BindPose를 중심으로 본의 Local 공간을 계산
+            //FMatrix ToBoneLocal = SrcVertex.BonePointers[j]->GetBoneOffset().ToMatrix();
+            FMatrix ToBoneLocal = SrcVertex.BonePointers[j]->GetSkinningMatrix();
+            // 2. 점의 위치를 BindPose를 중심으로 재해석
+            FVector BoneLocalPosition = SrcVertex.Position * ToBoneLocal.Inverse();
+            // 3. 점에 본의 로컬 트랜스폼을 적용해 바인드포즈로부터 변화된 값을 반영
+            FVector SkinnedLocalPosition = BoneLocalPosition * ToBoneLocal;
+            // 4. 점의 위치를 모델링 공간으로 다시 변경
+            FVector TransformedPos = SkinnedLocalPosition * ToBoneLocal;
             SkinnedPosition += TransformedPos * Weight;
 
-            // Normal 변환 (방향 벡터이므로 w=0)
-            FVector TransformedNormal(
-                SrcVertex.Normal.X * BoneMatrix.M[0][0] + SrcVertex.Normal.Y * BoneMatrix.M[1][0] + SrcVertex.Normal.Z * BoneMatrix.M[2][0],
-                SrcVertex.Normal.X * BoneMatrix.M[0][1] + SrcVertex.Normal.Y * BoneMatrix.M[1][1] + SrcVertex.Normal.Z * BoneMatrix.M[2][1],
-                SrcVertex.Normal.X * BoneMatrix.M[0][2] + SrcVertex.Normal.Y * BoneMatrix.M[1][2] + SrcVertex.Normal.Z * BoneMatrix.M[2][2]
-            );
+            // === Normal 변환 (Rotation만 적용, Translation 제거) ===
+            // Bone Transform에서 Rotation만 추출 (Translation 없는 행렬 생성)
+            FMatrix BoneRotationMatrix = ToBoneLocal;
+            // Translation 제거 (4행 Translation 값을 0으로)
+            BoneRotationMatrix.M[3][0] = 0.0f;
+            BoneRotationMatrix.M[3][1] = 0.0f;
+            BoneRotationMatrix.M[3][2] = 0.0f;
+
+            // Normal에 동일한 변환 적용 (Rotation만)
+            FVector BoneLocalNormal = SrcVertex.Normal * BoneRotationMatrix.Inverse();
+            FVector SkinnedLocalNormal = BoneLocalNormal * BoneRotationMatrix;
+            FVector TransformedNormal = SkinnedLocalNormal * BoneRotationMatrix;
             SkinnedNormal += TransformedNormal * Weight;
         }
 

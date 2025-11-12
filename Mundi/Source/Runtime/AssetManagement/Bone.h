@@ -50,7 +50,7 @@ public:
     FTransform GetWorldBindPose() const;
     
     // BindPos와 현 Transform의 차이를 반환
-    FMatrix GetBoneOffset();
+    FTransform GetBoneOffset();
     FMatrix GetSkinningMatrix();
 
     void SetParent(UBone* InParent);

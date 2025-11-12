@@ -199,8 +199,8 @@ struct FSkeletalCacheData
 			{
 				// FVertexDynamic 부분
 				Ar << SV.Position << SV.Normal << SV.UV << SV.Tangent << SV.Color;
-				// Skinning 데이터
-				Ar.Serialize(&SV.BoneIndices[0], sizeof(uint32) * 4);
+				// Skinning 데이터 (BonePointers는 직렬화 불가능하므로 Weight만 저장)
+				// TODO: Bone 이름을 저장하고 로드 시 복원하는 로직 필요
 				Ar.Serialize(&SV.BoneWeights[0], sizeof(float) * 4);
 			}
 		}
@@ -211,8 +211,7 @@ struct FSkeletalCacheData
 			{
 				// FVertexDynamic 부분
 				Ar << SV.Position << SV.Normal << SV.UV << SV.Tangent << SV.Color;
-				// Skinning 데이터
-				Ar.Serialize(&SV.BoneIndices[0], sizeof(uint32) * 4);
+				// Skinning 데이터 (BonePointers는 nullptr로 초기화됨, 재파싱 필요)
 				Ar.Serialize(&SV.BoneWeights[0], sizeof(float) * 4);
 			}
 		}

@@ -13,61 +13,58 @@ FSkeletalMesh::FSkeletalMesh(const FSkeletalMesh& Other) : FMesh(static_cast<con
     // 2. Flesh 배열 복사 (이제 FGroupInfo만 가지므로 간단히 복사)
     Fleshes = Other.Fleshes;
 
-    // 3. SkinnedVertices 복사 및 BoneIndices 재매핑
-    // 원본과 복사된 Skeleton의 Bone 순서 매핑을 생성
+    // 3. SkinnedVertices 복사 및 BonePointers 재매핑
+    // 원본과 복사된 Skeleton의 Bone 포인터 매핑을 생성
     if (Skeleton && Other.Skeleton)
     {
-        // 원본 Skeleton의 Bone 순서 (이름 -> 인덱스)
-        TMap<FString, int32> OriginalBoneNameToIndex;
-        int32 OriginalIndex = 0;
+        // 원본 Bone 포인터 -> 새 Bone 포인터 매핑 (이름 기반)
+        TMap<UBone*, UBone*> BoneRemapping;
+
+        // 원본 Bone 이름 -> 원본 Bone 포인터
+        TMap<FString, UBone*> OriginalBoneMap;
         Other.Skeleton->ForEachBone([&](UBone* Bone) {
             if (Bone)
             {
-                OriginalBoneNameToIndex.Add(Bone->GetName().ToString(), OriginalIndex++);
+                OriginalBoneMap.Add(Bone->GetName().ToString(), Bone);
             }
         });
 
-        // 복사된 Skeleton의 Bone 순서 (이름 -> 인덱스)
-        TMap<FString, int32> NewBoneNameToIndex;
-        int32 NewIndex = 0;
+        // 새 Bone 이름 -> 새 Bone 포인터
+        TMap<FString, UBone*> NewBoneMap;
         Skeleton->ForEachBone([&](UBone* Bone) {
             if (Bone)
             {
-                NewBoneNameToIndex.Add(Bone->GetName().ToString(), NewIndex++);
+                NewBoneMap.Add(Bone->GetName().ToString(), Bone);
             }
         });
 
-        // 인덱스 재매핑 테이블 생성 (원본 인덱스 -> 새 인덱스)
-        TArray<int32> IndexRemapping;
-        IndexRemapping.resize(OriginalBoneNameToIndex.Num(), -1);
-
-        for (const auto& Pair : OriginalBoneNameToIndex)
+        // 매핑 생성 (원본 Bone -> 새 Bone)
+        for (const auto& Pair : OriginalBoneMap)
         {
             const FString& BoneName = Pair.first;
-            int32 OldIndex = Pair.second;
+            UBone* OriginalBone = Pair.second;
 
-            if (const int32* NewIndexPtr = NewBoneNameToIndex.Find(BoneName))
+            if (UBone** NewBonePtr = NewBoneMap.Find(BoneName))
             {
-                IndexRemapping[OldIndex] = *NewIndexPtr;
+                BoneRemapping.Add(OriginalBone, *NewBonePtr);
             }
         }
 
-        // SkinnedVertices 복사 및 BoneIndices 재매핑
+        // SkinnedVertices 복사 및 BonePointers 재매핑
         SkinnedVertices.resize(Other.SkinnedVertices.Num());
         for (int i = 0; i < Other.SkinnedVertices.Num(); i++)
         {
             SkinnedVertices[i] = Other.SkinnedVertices[i];
 
-            // BoneIndices 재매핑
+            // BonePointers 재매핑 (원본 Skeleton의 Bone -> 새 Skeleton의 Bone)
             for (int j = 0; j < 4; j++)
             {
-                uint32 OldBoneIndex = Other.SkinnedVertices[i].BoneIndices[j];
-                if (OldBoneIndex < (uint32)IndexRemapping.Num())
+                UBone* OriginalBone = Other.SkinnedVertices[i].BonePointers[j];
+                if (OriginalBone)
                 {
-                    int32 NewBoneIndex = IndexRemapping[OldBoneIndex];
-                    if (NewBoneIndex >= 0)
+                    if (UBone** NewBonePtr = BoneRemapping.Find(OriginalBone))
                     {
-                        SkinnedVertices[i].BoneIndices[j] = (uint32)NewBoneIndex;
+                        SkinnedVertices[i].BonePointers[j] = *NewBonePtr;
                     }
                 }
             }
