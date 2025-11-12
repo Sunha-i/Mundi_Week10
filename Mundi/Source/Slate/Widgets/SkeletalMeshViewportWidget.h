@@ -44,6 +44,14 @@ private:
 	void UpdateGizmoVisibility();
 	void UpdateGizmoTransform();
 
+	// Bone picking
+	UBone* PickBoneFromViewport(const FVector2D& ViewportMousePos, const FVector2D& ViewportSize);
+	void CollectAllBones(UBone* Bone, TArray<UBone*>& OutBones);
+
+	// Picking thresholds
+	float GetJointPickRadius() const { return 0.05f; }		// Joint selection radius
+	float GetBoneLinePickThreshold() const { return 0.03f; }  // Bone line selection distance threshold
+
 public:
 	FName TargetMeshName{};
 	FSkeletalMeshPreviewScene WorldForPreviewManager;
