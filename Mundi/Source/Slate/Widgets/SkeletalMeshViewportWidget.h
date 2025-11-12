@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "Widgets/Widget.h"
-#include "FPreviewScene.h"
+#include "SkelMeshPreviewScene.h"
 #include "FViewport.h"
 
 class USkeletalMesh;
@@ -46,7 +46,7 @@ private:
 
 public:
 	FName TargetMeshName{};
-	FPreviewScene WorldForPreviewManager;
+	FSkeletalMeshPreviewScene WorldForPreviewManager;
 	FViewport Viewport;
 
 private:

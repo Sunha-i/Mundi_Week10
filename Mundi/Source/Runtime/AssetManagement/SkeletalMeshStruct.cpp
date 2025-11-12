@@ -4,57 +4,76 @@
 
 FSkeletalMesh::FSkeletalMesh(const FSkeletalMesh& Other) : FMesh(static_cast<const FMesh&>(Other))
 {
-    // Skeleton 복사 (있을 경우에만)
-    TMap<FString, UBone*> BoneMap;
-
+    // 1. Skeleton 깊은 복사
     if (Other.Skeleton)
     {
         Skeleton = Other.Skeleton->Duplicate();
-
-        // BoneMap 생성: 복사된 Skeleton의 모든 Bone을 이름으로 매핑
-        Skeleton->ForEachBone([&BoneMap](UBone* Bone) {
-            if (Bone)
-            {
-                FString BoneName = Bone->GetName().ToString();
-                BoneMap.Add(BoneName, Bone);
-            }
-        });
     }
 
-    // Flesh 배열 복사 (Skeleton 유무와 관계없이 항상 복사)
-    for (const FFlesh& OtherFlesh : Other.Fleshes)
+    // 2. Flesh 배열 복사 (이제 FGroupInfo만 가지므로 간단히 복사)
+    Fleshes = Other.Fleshes;
+
+    // 3. SkinnedVertices 복사 및 BonePointers 재매핑
+    // 원본과 복사된 Skeleton의 Bone 포인터 매핑을 생성
+    if (Skeleton && Other.Skeleton)
     {
-        FFlesh NewFlesh;
+        // 원본 Bone 포인터 -> 새 Bone 포인터 매핑 (이름 기반)
+        TMap<UBone*, UBone*> BoneRemapping;
 
-        // FGroupInfo 멤버 복사 (StartIndex, IndexCount, InitialMaterialName)
-        NewFlesh.StartIndex = OtherFlesh.StartIndex;
-        NewFlesh.IndexCount = OtherFlesh.IndexCount;
-        NewFlesh.InitialMaterialName = OtherFlesh.InitialMaterialName;
-
-        // Bones 배열 복사 (Skeleton이 있을 경우에만)
-        if (Skeleton)
-        {
-            for (int i = 0; i < OtherFlesh.Bones.Num(); i++)
+        // 원본 Bone 이름 -> 원본 Bone 포인터
+        TMap<FString, UBone*> OriginalBoneMap;
+        Other.Skeleton->ForEachBone([&](UBone* Bone) {
+            if (Bone)
             {
-                UBone* OtherBone = OtherFlesh.Bones[i];
-                if (OtherBone)
-                {
-                    FString BoneName = OtherBone->GetName().ToString();
-                    UBone* const* FoundBone = BoneMap.Find(BoneName);
+                OriginalBoneMap.Add(Bone->GetName().ToString(), Bone);
+            }
+        });
 
-                    if (FoundBone && *FoundBone)
+        // 새 Bone 이름 -> 새 Bone 포인터
+        TMap<FString, UBone*> NewBoneMap;
+        Skeleton->ForEachBone([&](UBone* Bone) {
+            if (Bone)
+            {
+                NewBoneMap.Add(Bone->GetName().ToString(), Bone);
+            }
+        });
+
+        // 매핑 생성 (원본 Bone -> 새 Bone)
+        for (const auto& Pair : OriginalBoneMap)
+        {
+            const FString& BoneName = Pair.first;
+            UBone* OriginalBone = Pair.second;
+
+            if (UBone** NewBonePtr = NewBoneMap.Find(BoneName))
+            {
+                BoneRemapping.Add(OriginalBone, *NewBonePtr);
+            }
+        }
+
+        // SkinnedVertices 복사 및 BonePointers 재매핑
+        SkinnedVertices.resize(Other.SkinnedVertices.Num());
+        for (int i = 0; i < Other.SkinnedVertices.Num(); i++)
+        {
+            SkinnedVertices[i] = Other.SkinnedVertices[i];
+
+            // BonePointers 재매핑 (원본 Skeleton의 Bone -> 새 Skeleton의 Bone)
+            for (int j = 0; j < 4; j++)
+            {
+                UBone* OriginalBone = Other.SkinnedVertices[i].BonePointers[j];
+                if (OriginalBone)
+                {
+                    if (UBone** NewBonePtr = BoneRemapping.Find(OriginalBone))
                     {
-                        NewFlesh.Bones.Add(*FoundBone);
+                        SkinnedVertices[i].BonePointers[j] = *NewBonePtr;
                     }
                 }
             }
         }
-
-        // Weights 배열 복사 (값 타입이므로 단순 복사)
-        NewFlesh.Weights = OtherFlesh.Weights;
-        NewFlesh.WeightsTotal = OtherFlesh.WeightsTotal;
-
-        Fleshes.Add(NewFlesh);
+    }
+    else
+    {
+        // Skeleton이 없으면 그냥 복사
+        SkinnedVertices = Other.SkinnedVertices;
     }
 }
 

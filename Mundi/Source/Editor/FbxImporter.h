@@ -77,10 +77,14 @@ public:
 		FSkeletalMesh* OutSkeletalMesh,
 		const TMap<int64, FMaterialInfo>& MaterialIDToInfoMap
 	);
-	void ExtractSkinningData(
+	// CPU Skinning용 정점별 스키닝 데이터 추출
+	void ExtractVertexSkinningData(
 		FbxMesh* InMesh,
-		FFlesh& OutFlesh,
-		const TMap<FString, UBone*>& BoneMap
+		TArray<struct FSkinnedVertex>& OutSkinnedVertices,
+		class USkeleton* Skeleton,  // Skeleton (Bone 포인터를 가져오기 위함)
+		const TArray<struct FNormalVertex>& InVertices,
+		const TArray<int32>& VertexToControlPointMap,  // 각 정점이 어떤 ControlPoint에서 왔는지
+		int32 VertexOffset  // 이 메시의 시작 정점 인덱스
 	);
 
 	// =======================

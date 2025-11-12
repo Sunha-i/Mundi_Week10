@@ -186,25 +186,33 @@ FTransform UBone::GetBoneOffset()
     // 올바른 Skinning Transform 계산:
     // SkinningMatrix = CurrentWorldMatrix * Inverse(BindPoseWorldMatrix)
 
+    // FTransform에는 직접 곱셈이 없으므로 행렬로 계산
     FTransform WorldTransform = GetWorldTransform();
     FTransform WorldBindPose = GetWorldBindPose();
 
-    // FTransform의 Relative 변환 기능 사용
-    // GetRelativeTransform(Parent)는 this = result * Parent 를 만족하는 result를 반환
-    // 즉, this * Inverse(Parent) = result
-    FTransform BoneOffset = WorldTransform.GetRelativeTransform(WorldBindPose);
-
-    return BoneOffset;
+    return WorldBindPose.GetRelativeTransform(WorldTransform);
 }
 
 FMatrix UBone::GetSkinningMatrix()
 {
-    return GetBoneOffset().GetModelingMatrix();
+    // Skinning Matrix = CurrentWorldMatrix * Inverse(BindPoseWorldMatrix)
+    FTransform WorldTransform = GetWorldTransform();
+    FTransform WorldBindPose = GetWorldBindPose();
+
+    FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
+    FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
+
+    return CurrentWorldMatrix * InverseBindPoseMatrix;
 }
 
 void UBone::SetParent(UBone* InParent)
 {
     Parent = InParent;
+}
+
+UBone* UBone::GetParent() const
+{
+    return Parent;
 }
 
 void UBone::AddChild(UBone* InChild)
@@ -236,12 +244,19 @@ void UBone::DuplicateSubObjects()
 {
     Super::DuplicateSubObjects();
 
-    // Parent는 복제하지 않음 (무한 재귀 방지)
-    // Skeleton이 Root부터 자식 방향으로 복제를 진행함
+    // 얕은 복사로 인해 Parent가 원본 Bone을 가리키므로 nullptr로 초기화
+    // (Root가 아닌 Bone들은 부모에서 SetParent로 재설정될 것임)
+    //Parent = nullptr;
 
+    // Children 복제 및 Parent 재설정
     for (int32 i = 0; i < Children.Num(); i++)
     {
-        Children[i] = Children[i]->Duplicate();
+        UBone* OriginalChild = Children[i];
+        UBone* DuplicatedChild = OriginalChild->Duplicate();
+        Children[i] = DuplicatedChild;
+
+        // 복제된 자식의 Parent를 현재 복제된 Bone으로 재설정
+        DuplicatedChild->SetParent(this);
     }
 }
 

@@ -98,20 +98,8 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 		PreviewActor = nullptr;
 	}
 
-	// Actor 생성 및 Mesh 설정
-	ASkeletalMeshActor* SkeletalMeshActor = NewObject<ASkeletalMeshActor>();
-
-	USkeletalMeshComponent* MeshComp = SkeletalMeshActor->GetSkeletalMeshComponent();
-	if (MeshComp)
-	{
-		MeshComp->SetSkeletalMesh(TargetMeshName.ToString());
-	}
-	else
-	{
-		UE_LOG("[SkeletalMeshViewportWidget] Error: SkeletalMeshComponent is null");
-	}
-
-	WorldForPreviewManager.SetActor(SkeletalMeshActor);
+	WorldForPreviewManager.SetSkelMeshActor(TargetMeshName.ToString());
+	ASkeletalMeshActor* SkeletalMeshActor = WorldForPreviewManager.GetSkelMeshActor();
 	PreviewWorld->AddEditorActor(SkeletalMeshActor);
 	PreviewActor = SkeletalMeshActor;
 	MarkSkeletonOverlayDirty();
@@ -161,6 +149,7 @@ void USkeletalMeshViewportWidget::RenderBoneHierarchyPanel(float Width, float He
 			ImGui::EndChild();
 			return;
 		}
+
 
 		// SkeletalMeshActor 찾기
 		ASkeletalMeshActor* SkeletalMeshActor = nullptr;
@@ -519,37 +508,7 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		ImGui::Text("Parent:");
 		ImGui::Indent();
 
-		UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview();
-		UBone* ParentBone = nullptr;
-		if (PreviewWorld && !PreviewWorld->GetActors().empty())
-		{
-			for (AActor* Actor : PreviewWorld->GetActors())
-			{
-				if (ASkeletalMeshActor* SkelActor = Cast<ASkeletalMeshActor>(Actor))
-				{
-					USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent();
-					if (MeshComp && MeshComp->GetSkeletalMesh())
-					{
-						USkeleton* Skeleton = MeshComp->GetSkeletalMesh()->GetSkeletalMeshAsset()->Skeleton;
-						if (Skeleton)
-						{
-							// Root부터 재귀적으로 Parent 찾기
-							Skeleton->ForEachBone([&](UBone* Bone) {
-								for (UBone* Child : Bone->GetChildren())
-								{
-									if (Child == SelectedBone)
-									{
-										ParentBone = Bone;
-										return;
-									}
-								}
-							});
-						}
-					}
-					break;
-				}
-			}
-		}
+		UBone* ParentBone = SelectedBone->GetParent();
 
 		ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "%s", ParentBone ? ParentBone->GetName().ToString().c_str() : "(Root)");
 		ImGui::Unindent();
@@ -619,10 +578,13 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		bChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
 		ImGui::PopID();
 
+		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
+		
 		// 값이 변경되면 적용
 		if (bChanged)
 		{
 			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
+			SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 			SelectedBone->SetRelativeTransform(NewTransform);
 			MarkSkeletonOverlayDirty();
 		}

@@ -1,15 +1,9 @@
 ﻿#pragma once
 
-class UBone;
-
+// FFlesh는 이제 섹션 정보만 저장 (FGroupInfo 그대로)
+// Skinning 데이터는 정점별로 FSkinnedVertex에 저장됨
 struct FFlesh : public FGroupInfo
 {
-    void Clear();
-    void SetData(const TArray<UBone*>& InBones, const TArray<float>& InWeights);
-    void SetBones(const TArray<UBone*>& InBones);
-    void SetWeights(const TArray<float>& InWeights);
-    
-    TArray<UBone*> Bones;
-    TArray<float> Weights;
-    float WeightsTotal = 1.f;
+    // 더 이상 섹션별 본 정보를 저장하지 않음
+    // CPU Skinning은 정점별로 처리됨
 };
