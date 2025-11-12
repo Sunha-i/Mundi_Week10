@@ -1,9 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "Actor.h"
 
 class USkeletalMeshComponent;
-class ULineComponent;
-class UWorld;
 class ASkeletalMeshActor : public AActor
 {
 public:
@@ -27,18 +25,8 @@ public:
     // Serialize
     void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
 
-    // Editor Debug Skeleton Overlay (owned by actor)
-    ULineComponent* GetSkeletonOverlay() const { return SkeletonOverlay; }
-    ULineComponent* EnsureSkeletonOverlay(UWorld* World);
-    void ClearSkeletonOverlay(bool bDestroyComponent);
-    void BuildSkeletonOverlay();
-private:
-    void BuildSkeletonLinesRecursive(class UBone* Bone, const FTransform& ComponentWorldInverse, ULineComponent* Line);
-    void AddJointSphereOriented(const FVector& CenterLocal, const FQuat& RotationLocal, ULineComponent* Line);
-    void AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* Line);
-
 protected:
     USkeletalMeshComponent* SkeletalMeshComponent;
-    ULineComponent* SkeletonOverlay = nullptr;
 };
+
 
