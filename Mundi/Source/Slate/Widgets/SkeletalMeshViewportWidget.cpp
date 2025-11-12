@@ -373,10 +373,13 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 			{
 				if (ImGui::IsMouseDown(0))
 				{
+					ASkeletalMeshActor* SkelActor = GetPreviewActor();
+					AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+					if (!SkelActor || !Gizmo)	return;
+
 					FVector2D CurrentMousePosition(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
 					FVector2D MouseOffset = CurrentMousePosition - DragStartMousePosition;
 
-					AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
 					FTransform NewWorldTransform = Gizmo->CalculateDragTransform(
 						DragStartBoneTransfrom, MouseOffset, PreviewCamera, &Viewport,
 					    CurrentGizmoMode, CurrentGizmoSpace, DraggingGizmoAxis, DragScreenVector
@@ -388,7 +391,7 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 					{
 						ParentWorldTransform = ParentBone->GetWorldTransform();
 					}
-					else if (ASkeletalMeshActor * SkelActor = GetPreviewActor())
+					else  // Root bone
 					{
 						if (USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent())
 						{
@@ -398,7 +401,11 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 					FTransform NewRelativeTransform = ParentWorldTransform.GetRelativeTransform(NewWorldTransform);
 					SelectedBone->SetRelativeTransform(NewRelativeTransform);
+
+					// Update
 					UpdateGizmoTransform();
+					MarkSkeletonOverlayDirty();
+					SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 				}
 
 				if (ImGui::IsMouseReleased(0))
