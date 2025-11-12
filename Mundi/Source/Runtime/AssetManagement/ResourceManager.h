@@ -46,6 +46,9 @@ public:
 	T* Load(const FString& InFilePath, Args&&... InArgs);
 
 	template<typename T>
+	void Unload(const FString& InFilePath);
+
+	template<typename T>
 	bool Add(const FString& InFilePath, UObject* InObject);
 
 	template<typename T>
@@ -233,6 +236,24 @@ inline UShader* UResourceManager::Load(const FString& InFilePath, TArray<FShader
 
 		Resources[typeIndex][NormalizedPath] = Resource;
 		return Resource;
+	}
+}
+
+template<typename T>
+void UResourceManager::Unload(const FString& InFilePath)
+{
+	if (InFilePath.empty())
+		return;
+
+	// 경로 정규화
+	FString NormalizedPath = NormalizePath(InFilePath);
+
+	uint8 typeIndex = static_cast<uint8>(GetResourceType<T>());
+	auto iter = Resources[typeIndex].find(NormalizedPath);
+	if (iter != Resources[typeIndex].end())
+	{
+		// 캐시에서만 제거 (UObject 자체는 소멸자에서 이미 삭제됨)
+		Resources[typeIndex].erase(iter);
 	}
 }
 

@@ -1,25 +1,5 @@
 ﻿#include "pch.h"
 #include "Flesh.h"
 
-void FFlesh::Clear()
-{
-    Bones.clear();
-    Weights.clear();
-    WeightsTotal = 1.f;
-}
-
-void FFlesh::SetData(const TArray<UBone*>& InBones, const TArray<float>& InWeights)
-{
-    SetBones(InBones);
-    SetWeights(InWeights);
-}
-
-void FFlesh::SetBones(const TArray<UBone*>& InBones)
-{
-    Bones = InBones;
-}
-
-void FFlesh::SetWeights(const TArray<float>& InWeights)
-{
-    Weights = InWeights;
-}
+// FFlesh는 이제 FGroupInfo만 사용 (섹션 정보)
+// Skinning 데이터는 정점별로 FSkinnedVertex에 저장됨

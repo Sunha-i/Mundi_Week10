@@ -1251,10 +1251,6 @@ void D3D11RHI::CopyTexture(ID3D11Texture2D* DestTexture, ID3D11Texture2D* Source
     DestTexture->GetDesc(&destDesc);
     SourceTexture->GetDesc(&srcDesc);
 
-    UE_LOG("[CopyTexture] Dest: %dx%d, Source: %dx%d",
-        destDesc.Width, destDesc.Height,
-        srcDesc.Width, srcDesc.Height);
-
     // CopyResource는 두 텍스처가 완전히 동일한 크기여야 함
     if (destDesc.Width != srcDesc.Width || destDesc.Height != srcDesc.Height)
     {
