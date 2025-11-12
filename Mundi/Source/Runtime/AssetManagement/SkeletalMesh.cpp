@@ -270,38 +270,32 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             if (Weight <= 0.0001f)
                 continue;
 
-            // uint32 BoneIndex = SrcVertex.BoneIndices[j];
-            // if (BoneIndex >= (uint32)BoneMatrices.Num())
-            //     continue;
-            //
-            // const FMatrix& BoneMatrix = BoneMatrices[BoneIndex];
+            UBone* Bone = SrcVertex.BonePointers[j];
+            if (!Bone)
+                continue;
 
-            // Position 변환 (동차 좌표 사용)
+            // 올바른 Skinning Matrix 계산 (Row-vector convention)
+            // v' = v × InverseBindPoseMatrix × CurrentWorldMatrix
+            FTransform WorldTransform = Bone->GetWorldTransform();
+            FTransform WorldBindPose = Bone->GetWorldBindPose();
 
-            // === Position 변환 ===
-            // 1. BindPose를 중심으로 본의 Local 공간을 계산
-            //FMatrix ToBoneLocal = SrcVertex.BonePointers[j]->GetBoneOffset().ToMatrix();
-            FMatrix ToBoneLocal = SrcVertex.BonePointers[j]->GetSkinningMatrix();
-            // 2. 점의 위치를 BindPose를 중심으로 재해석
-            FVector BoneLocalPosition = SrcVertex.Position * ToBoneLocal.Inverse();
-            // 3. 점에 본의 로컬 트랜스폼을 적용해 바인드포즈로부터 변화된 값을 반영
-            FVector SkinnedLocalPosition = BoneLocalPosition * ToBoneLocal;
-            // 4. 점의 위치를 모델링 공간으로 다시 변경
-            FVector TransformedPos = SkinnedLocalPosition * ToBoneLocal;
+            FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
+            FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
+
+            // Row-vector: 먼저 InvBindPose, 그 다음 CurrentWorld
+            FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
+
+            // Position 변환
+            FVector TransformedPos = SrcVertex.Position * SkinningMatrix;
             SkinnedPosition += TransformedPos * Weight;
 
-            // === Normal 변환 (Rotation만 적용, Translation 제거) ===
-            // Bone Transform에서 Rotation만 추출 (Translation 없는 행렬 생성)
-            FMatrix BoneRotationMatrix = ToBoneLocal;
-            // Translation 제거 (4행 Translation 값을 0으로)
-            BoneRotationMatrix.M[3][0] = 0.0f;
-            BoneRotationMatrix.M[3][1] = 0.0f;
-            BoneRotationMatrix.M[3][2] = 0.0f;
+            // Normal 변환 (Rotation만 적용)
+            FMatrix RotationOnlyMatrix = SkinningMatrix;
+            RotationOnlyMatrix.M[3][0] = 0.0f;
+            RotationOnlyMatrix.M[3][1] = 0.0f;
+            RotationOnlyMatrix.M[3][2] = 0.0f;
 
-            // Normal에 동일한 변환 적용 (Rotation만)
-            FVector BoneLocalNormal = SrcVertex.Normal * BoneRotationMatrix.Inverse();
-            FVector SkinnedLocalNormal = BoneLocalNormal * BoneRotationMatrix;
-            FVector TransformedNormal = SkinnedLocalNormal * BoneRotationMatrix;
+            FVector TransformedNormal = SrcVertex.Normal * RotationOnlyMatrix;
             SkinnedNormal += TransformedNormal * Weight;
         }
 
