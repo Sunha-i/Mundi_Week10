@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <fbxsdk.h>
 #include "UEContainer.h"
@@ -10,7 +10,7 @@ struct FStaticMesh;
 struct FFlesh;
 
 // FBX 스케일 통합 (cm 기준)
-constexpr float FBXUnitScale = 0.01f;
+//constexpr float FBXUnitScale = 0.01f;
 // ============================================================================
 // [FBX 유틸리티] 공통 변환 / 단위 스케일
 // ============================================================================
@@ -20,10 +20,11 @@ namespace FBXUtil
 
 	inline FVector ConvertPosition(const FbxVector4& Pos)
 	{
+		// FBX는 cm 단위, 엔진은 m 단위 -> 0.01 스케일
 		return FVector(
-			static_cast<float>(Pos[0]),
+			static_cast<float>(Pos[0]) ,
 			static_cast<float>(Pos[1]),
-			static_cast<float>(Pos[2])) * UnitScale;
+			static_cast<float>(Pos[2]) )  * UnitScale;
 	}
 
 	inline FVector ConvertNormal(const FbxVector4& Normal)
@@ -68,6 +69,7 @@ public:
 	UBone* FindSkeletonRootAndBuild(FbxNode* RootNode);
 	UBone* ProcessSkeletonNode(FbxNode* InNode, UBone* InParent = nullptr);
 	FTransform ConvertFbxTransform(const FbxAMatrix& InMatrix);
+	FMatrix ConvertFbxMatrix(const FbxAMatrix& InMatrix);
 
 	// =======================
 	//  Skeletal Mesh
@@ -96,6 +98,11 @@ public:
 		FStaticMesh* OutStaticMesh,
 		TArray<FMaterialInfo>& OutMaterialInfos
 	);
+
+	// =======================
+	//  Debug
+	// =======================
+	void DumpSkeletalMeshInfo(const FSkeletalMesh* SkeletalMesh, const FString& OutputPath);
 
 private:
 	FbxManager* SdkManager = nullptr;

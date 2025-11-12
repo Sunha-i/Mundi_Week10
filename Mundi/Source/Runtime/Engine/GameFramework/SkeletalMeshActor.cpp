@@ -155,7 +155,7 @@ void ASkeletalMeshActor::BuildSkeletonLinesRecursive(UBone* Bone, const FTransfo
 
     // 로컬 공간으로 변환 (직접 멤버 접근)
     const FVector ParentLocal = ComponentWorldInverse.TransformPosition(BoneWorld.Translation);
-    const FQuat RotationLocal = ComponentWorldInverse.Rotation.Inverse() * BoneWorld.Rotation;
+    const FQuat RotationLocal =  BoneWorld.Rotation * ComponentWorldInverse.Rotation.Inverse();
 
     // 색상 결정: 선택된 본이면 초록색, 아니면 흰색
     const bool bIsSelected = (Bone == SelectedBone);

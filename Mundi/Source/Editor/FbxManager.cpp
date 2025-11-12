@@ -261,6 +261,13 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 		BuildStaticMeshFromScene(Scene, MaterialMap, MaterialInfos, NormalizedPathStr);
 	}
 
+	// 디버그: 스켈레탈 메시 정보 txt 출력
+	if (SkeletalMesh)
+	{
+		FString OutputPath = NormalizedPathStr + "_debug.txt";
+		ImporterUtil->DumpSkeletalMeshInfo(SkeletalMesh, OutputPath);
+	}
+
 	Scene->Destroy();
 	return SkeletalMesh;
 }

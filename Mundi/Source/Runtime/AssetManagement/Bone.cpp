@@ -7,6 +7,7 @@ BEGIN_PROPERTIES(UBone)
     ADD_PROPERTY(FName, Name, "[데이터]", true, "뼈의 이름입니다")
     ADD_PROPERTY(FTransform, RelativeTransform, "[데이터]", true, "뼈의 로컬 트랜스폼입니다")
     ADD_PROPERTY(FTransform, BindPose, "[데이터]", true, "뼈의 초기 트랜스폼입니다")
+    ADD_PROPERTY(FMatrix, OffsetMatrix, "[데이터]", true, "역바인드 행렬입니다")
 END_PROPERTIES()
 
 UBone::UBone(const FName& InName, const FTransform& InitialTransform) :
@@ -199,7 +200,24 @@ FTransform UBone::GetBoneOffset()
 
 FMatrix UBone::GetSkinningMatrix()
 {
-    return GetBoneOffset().GetModelingMatrix();
+    FTransform BoneOffset = GetBoneOffset();
+    FMatrix Result = BoneOffset.ToMatrix();
+
+    // 디버그: 루트 본만 출력 (처음 3번)
+    static int DebugCount = 0;
+    if (DebugCount < 3 && Parent == nullptr)  // 루트 본
+    {
+        FVector WorldLoc = GetWorldLocation();
+        UE_LOG("[Skinning %d] Bone '%s'", DebugCount, GetName().ToString().c_str());
+        UE_LOG("  WorldLoc: (%.2f, %.2f, %.2f)", WorldLoc.X, WorldLoc.Y, WorldLoc.Z);
+        UE_LOG("  Matrix Translation: (%.2f, %.2f, %.2f)",
+            Result.M[3][0], Result.M[3][1], Result.M[3][2]);
+        UE_LOG("  BoneOffset Translation: (%.2f, %.2f, %.2f)",
+            BoneOffset.Translation.X, BoneOffset.Translation.Y, BoneOffset.Translation.Z);
+        DebugCount++;
+    }
+
+    return Result;
 }
 
 void UBone::SetParent(UBone* InParent)
@@ -257,4 +275,14 @@ void UBone::PostDuplicate()
             Child->SetParent(this);
         }
     }
+}
+
+const FMatrix& UBone::GetOffsetMatrix() const
+{
+    return OffsetMatrix;
+}
+
+void UBone::SetOffsetMatrix(const FMatrix& InOffsetMatrix)
+{
+    OffsetMatrix = InOffsetMatrix;
 }

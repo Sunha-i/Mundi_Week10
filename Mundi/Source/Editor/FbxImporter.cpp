@@ -115,6 +115,24 @@ FTransform FFbxImporter::ConvertFbxTransform(const FbxAMatrix& InMatrix)
 	return Result;
 }
 
+FMatrix FFbxImporter::ConvertFbxMatrix(const FbxAMatrix& InMatrix)
+{
+	FMatrix Result;
+
+	// FBX은 Column-major 의미, DirectX는 Row-major
+	// → 행렬 전치 필요
+	for (int Row = 0; Row < 4; ++Row)
+	{
+		for (int Col = 0; Col < 4; ++Col)
+		{
+			// Transpose while copying
+			Result.M[Row][Col] = static_cast<float>(InMatrix.Get(Col, Row));
+		}
+	}
+
+	return Result;
+}
+
 // ============================================================================
 // [공통 메쉬 추출기] Static / Skeletal 겸용
 // ============================================================================
@@ -124,7 +142,9 @@ void ExtractCommonMeshData(
 	MeshType* OutMesh,
 	const TMap<int64, FMaterialInfo>& MatMap,
 	bool bSkeletal,
-	std::function<void(FFlesh&)> OnAfterSection = nullptr 
+	std::function<void(FFlesh&)> OnAfterSection = nullptr,
+	const TMap<FString, UBone*>* BoneMapPtr = nullptr,
+	FFbxImporter* Importer = nullptr
 )
 {
 	using namespace FBXUtil;
@@ -132,12 +152,104 @@ void ExtractCommonMeshData(
 		return;
 
 	const FbxVector4* ControlPoints = InMesh->GetControlPoints();
+	const int ControlPointCount = InMesh->GetControlPointsCount();
 	const int PolygonCount = InMesh->GetPolygonCount();
 
 	TArray<FNormalVertex> Vertices;
 	TArray<uint32> Indices;
 	TMap<int, TArray<int>> MaterialToTriangles;
 	TMap<int, TArray<uint32>> PolyToVertIdx;
+
+	// ====== [스키닝 정보 추출: ControlPoint -> Bone Influences] ======
+	struct FBoneInfluence
+	{
+		TArray<int32> BoneIndices;  // FFlesh.Bones 배열 내 인덱스
+		TArray<float> Weights;
+	};
+	TArray<FBoneInfluence> ControlPointInfluences; // ControlPoint별 본 영향
+	TArray<UBone*> MeshBoneList; // 이 메시가 사용하는 본 리스트
+
+	if (bSkeletal && BoneMapPtr)
+	{
+		ControlPointInfluences.resize(ControlPointCount);
+
+		// FbxSkin에서 스키닝 정보 추출
+		int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
+		if (SkinCount > 0)
+		{
+			FbxSkin* Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
+			int ClusterCount = Skin->GetClusterCount();
+
+			// 먼저 이 메시가 사용하는 본 리스트 구축
+			for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ++ClusterIdx)
+			{
+				FbxCluster* Cluster = Skin->GetCluster(ClusterIdx);
+				if (!Cluster || !Cluster->GetLink()) continue;
+
+				FString BoneName(Cluster->GetLink()->GetName());
+				if (auto* Found = BoneMapPtr->Find(BoneName))
+				{
+					MeshBoneList.Add(*Found);
+				}
+			}
+
+			// 각 Cluster(본)마다 영향받는 ControlPoint 처리
+			for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ++ClusterIdx)
+			{
+				FbxCluster* Cluster = Skin->GetCluster(ClusterIdx);
+				if (!Cluster || !Cluster->GetLink()) continue;
+
+				FString BoneName(Cluster->GetLink()->GetName());
+				int32 BoneIndex = -1;
+
+				// MeshBoneList에서 이 본의 인덱스 찾기
+				for (int i = 0; i < MeshBoneList.size(); i++)
+				{
+					if (MeshBoneList[i]->GetName().ToString() == BoneName)
+					{
+						BoneIndex = i;
+						break;
+					}
+				}
+
+				if (BoneIndex < 0) continue;
+
+				// 이 본이 영향을 주는 ControlPoint들
+				int* CPIndices = Cluster->GetControlPointIndices();
+				double* CPWeights = Cluster->GetControlPointWeights();
+				int CPCount = Cluster->GetControlPointIndicesCount();
+
+				for (int i = 0; i < CPCount; ++i)
+				{
+					int CPIdx = CPIndices[i];
+					float Weight = (float)CPWeights[i];
+
+					if (CPIdx < ControlPointCount && Weight > 0.0001f)
+					{
+						ControlPointInfluences[CPIdx].BoneIndices.Add(BoneIndex);
+						ControlPointInfluences[CPIdx].Weights.Add(Weight);
+					}
+				}
+			}
+
+			// 각 ControlPoint의 가중치 정규화 (합이 1.0이 되도록)
+			for (int CPIdx = 0; CPIdx < ControlPointCount; ++CPIdx)
+			{
+				auto& Influence = ControlPointInfluences[CPIdx];
+				if (Influence.Weights.size() == 0) continue;
+
+				float TotalWeight = 0.0f;
+				for (float W : Influence.Weights)
+					TotalWeight += W;
+
+				if (TotalWeight > 0.0001f)
+				{
+					for (float& W : Influence.Weights)
+						W /= TotalWeight;
+				}
+			}
+		}
+	}
 
 	// ----- [정점 데이터] -----
 	for (int PolyIdx = 0; PolyIdx < PolygonCount; ++PolyIdx)
@@ -173,6 +285,26 @@ void ExtractCommonMeshData(
 
 				// Tangent
 				V.Tangent = DefaultTangent();
+
+				// ====== 스키닝 정보 설정 (최대 4개 본) ======
+				if (bSkeletal && CPIdx < ControlPointInfluences.size())
+				{
+					const auto& Influence = ControlPointInfluences[CPIdx];
+					int InfluenceCount = std::min((int)Influence.BoneIndices.size(), 4);
+
+					for (int i = 0; i < InfluenceCount; ++i)
+					{
+						V.BoneIndices[i] = (uint32)Influence.BoneIndices[i];
+						V.BoneWeights[i] = Influence.Weights[i];
+					}
+
+					// 남은 슬롯은 0으로 초기화 (이미 기본값이지만 명시적으로)
+					for (int i = InfluenceCount; i < 4; ++i)
+					{
+						V.BoneIndices[i] = 0;
+						V.BoneWeights[i] = 0.0f;
+					}
+				}
 
 				uint32 Idx = (uint32)Vertices.size();
 				Vertices.Add(V);
@@ -248,7 +380,49 @@ void ExtractCommonMeshData(
 		}
 		else Section.InitialMaterialName = "DefaultMaterial";
 
-		if (OnAfterSection) OnAfterSection(Section); // 스킨 처리용 콜백
+		// ====== Skeletal Mesh: 본 리스트 및 OffsetMatrix 저장 ======
+		if (bSkeletal && BoneMapPtr)
+		{
+			// FFlesh에 본 리스트 저장
+			Section.Bones = MeshBoneList;
+
+			// 각 본의 OffsetMatrix 계산 (ExtractSkinningData 기능 통합)
+			int SkinCount = InMesh->GetDeformerCount(FbxDeformer::eSkin);
+			if (SkinCount > 0)
+			{
+				FbxSkin* Skin = static_cast<FbxSkin*>(InMesh->GetDeformer(0, FbxDeformer::eSkin));
+				int ClusterCount = Skin->GetClusterCount();
+
+				for (int ClusterIdx = 0; ClusterIdx < ClusterCount; ++ClusterIdx)
+				{
+					FbxCluster* Cluster = Skin->GetCluster(ClusterIdx);
+					if (!Cluster || !Cluster->GetLink()) continue;
+
+					FString BoneName(Cluster->GetLink()->GetName());
+					if (auto* Found = BoneMapPtr->Find(BoneName))
+					{
+						UBone* Bone = *Found;
+
+						// OffsetMatrix 계산 및 저장
+						FbxAMatrix TransformLinkMatrix;
+						Cluster->GetTransformLinkMatrix(TransformLinkMatrix);
+
+						FbxAMatrix TransformMatrix;
+						Cluster->GetTransformMatrix(TransformMatrix);
+
+						// OffsetMatrix = Inverse(BindPoseWorld) * MeshWorld
+						FbxAMatrix OffsetMatrixFbx = TransformLinkMatrix.Inverse() * TransformMatrix;
+						FMatrix OffsetMatrix = Importer->ConvertFbxMatrix(OffsetMatrixFbx);
+						Bone->SetOffsetMatrix(OffsetMatrix);
+					}
+				}
+			}
+
+			// FFlesh.Weights는 더 이상 사용하지 않음 (정점별 가중치로 대체)
+			Section.Weights.resize(Section.Bones.size(), 1.0f);
+		}
+
+		if (OnAfterSection) OnAfterSection(Section); // 스킨 처리용 콜백 (필요시)
 		if constexpr (std::is_same_v<MeshType, FStaticMesh>)
 			OutMesh->GroupInfos.Add((FGroupInfo&)Section);
 		else
@@ -280,15 +454,134 @@ void FFbxImporter::ExtractSkinningData(FbxMesh* InMesh, FFlesh& OutFlesh, const 
 		FString BoneName(Cl->GetLink()->GetName());
 		if (auto* Found = BoneMap.Find(BoneName))
 		{
-			OutFlesh.Bones.Add(*Found);
+			UBone* Bone = *Found;
+			OutFlesh.Bones.Add(Bone);
+
 			double* W = Cl->GetControlPointWeights();
 			int Cnt = Cl->GetControlPointIndicesCount();
 
 			float Avg = 0.0f;
 			for (int j = 0; j < Cnt; ++j) Avg += (float)W[j];
 			OutFlesh.Weights.Add(Cnt > 0 ? Avg / Cnt : 0.f);
+
+			// OffsetMatrix 계산 및 저장
+			// TransformLinkMatrix = 본의 BindPose 월드 행렬
+			FbxAMatrix TransformLinkMatrix;
+			Cl->GetTransformLinkMatrix(TransformLinkMatrix);
+
+			// TransformMatrix = 메시의 월드 행렬
+			FbxAMatrix TransformMatrix;
+			Cl->GetTransformMatrix(TransformMatrix);
+
+			// OffsetMatrix = MeshWorld * Inverse(BindPoseWorld)
+			// VertexWorld = VertexMeshLocal * MeshWorld * Inverse(BoneBindPose) * BoneCurrent
+			FbxAMatrix OffsetMatrixFbx = TransformLinkMatrix.Inverse() * TransformMatrix;
+			FMatrix OffsetMatrix = ConvertFbxMatrix(OffsetMatrixFbx);
+			Bone->SetOffsetMatrix(OffsetMatrix);
 		}
 	}
+}
+
+// ============================================================================
+// [디버그: 스켈레탈 메시 정보 txt 출력]
+// ============================================================================
+void FFbxImporter::DumpSkeletalMeshInfo(const FSkeletalMesh* SkeletalMesh, const FString& OutputPath)
+{
+	if (!SkeletalMesh)
+		return;
+
+	std::ofstream OutFile(OutputPath);
+	if (!OutFile.is_open())
+	{
+		UE_LOG("[FBX Dump] Failed to open file: %s", OutputPath.c_str());
+		return;
+	}
+
+	OutFile << "========================================\n";
+	OutFile << "SKELETAL MESH DEBUG INFO\n";
+	OutFile << "========================================\n\n";
+
+	// Skeleton 정보
+	if (SkeletalMesh->Skeleton && SkeletalMesh->Skeleton->GetRoot())
+	{
+		OutFile << "### SKELETON ###\n";
+		std::function<void(UBone*, int)> DumpBone = [&](UBone* Bone, int Depth)
+		{
+			if (!Bone)
+				return;
+
+			FString Indent(Depth * 2, ' ');
+			OutFile << Indent.c_str() << "Bone: " << Bone->GetName().ToString().c_str() << "\n";
+
+			FMatrix OffsetMatrix = Bone->GetOffsetMatrix();
+			OutFile << Indent.c_str() << "  OffsetMatrix:\n";
+			OutFile << Indent.c_str() << "    [" << OffsetMatrix.M[0][0] << ", " << OffsetMatrix.M[0][1] << ", " << OffsetMatrix.M[0][2] << ", " << OffsetMatrix.M[0][3] << "]\n";
+			OutFile << Indent.c_str() << "    [" << OffsetMatrix.M[1][0] << ", " << OffsetMatrix.M[1][1] << ", " << OffsetMatrix.M[1][2] << ", " << OffsetMatrix.M[1][3] << "]\n";
+			OutFile << Indent.c_str() << "    [" << OffsetMatrix.M[2][0] << ", " << OffsetMatrix.M[2][1] << ", " << OffsetMatrix.M[2][2] << ", " << OffsetMatrix.M[2][3] << "]\n";
+			OutFile << Indent.c_str() << "    [" << OffsetMatrix.M[3][0] << ", " << OffsetMatrix.M[3][1] << ", " << OffsetMatrix.M[3][2] << ", " << OffsetMatrix.M[3][3] << "]\n";
+
+			FTransform BindPose = Bone->GetRelativeBindPose();
+			OutFile << Indent.c_str() << "  BindPose (Relative):\n";
+			OutFile << Indent.c_str() << "    Loc: (" << BindPose.Translation.X << ", " << BindPose.Translation.Y << ", " << BindPose.Translation.Z << ")\n";
+			OutFile << Indent.c_str() << "    Rot: (" << BindPose.Rotation.X << ", " << BindPose.Rotation.Y << ", " << BindPose.Rotation.Z << ", " << BindPose.Rotation.W << ")\n";
+			OutFile << Indent.c_str() << "    Scl: (" << BindPose.Scale3D.X << ", " << BindPose.Scale3D.Y << ", " << BindPose.Scale3D.Z << ")\n";
+
+			for (UBone* Child : Bone->GetChildren())
+			{
+				DumpBone(Child, Depth + 1);
+			}
+		};
+
+		DumpBone(SkeletalMesh->Skeleton->GetRoot(), 0);
+		OutFile << "\n";
+	}
+
+	// Fleshes 정보
+	OutFile << "### FLESHES (Submeshes) ###\n";
+	OutFile << "Total Fleshes: " << SkeletalMesh->Fleshes.Num() << "\n\n";
+
+	for (int i = 0; i < SkeletalMesh->Fleshes.Num(); i++)
+	{
+		const FFlesh& Flesh = SkeletalMesh->Fleshes[i];
+		OutFile << "Flesh [" << i << "]:\n";
+		OutFile << "  StartIndex: " << Flesh.StartIndex << "\n";
+		OutFile << "  IndexCount: " << Flesh.IndexCount << "\n";
+		OutFile << "  Material: " << Flesh.InitialMaterialName.c_str() << "\n";
+		OutFile << "  Bones Count: " << Flesh.Bones.Num() << "\n";
+		OutFile << "  Weights:\n";
+
+		for (int j = 0; j < Flesh.Bones.Num(); j++)
+		{
+			UBone* Bone = Flesh.Bones[j];
+			float Weight = j < Flesh.Weights.Num() ? Flesh.Weights[j] : 0.f;
+			FString BoneName = Bone ? Bone->GetName().ToString() : "NULL";
+			OutFile << "    [" << j << "] " << BoneName.c_str() << " : Weight=" << Weight << "\n";
+		}
+		OutFile << "\n";
+	}
+
+	// Vertices 정보 (처음 10개만 샘플링)
+	OutFile << "### VERTICES (First 10) ###\n";
+	OutFile << "Total Vertices: " << SkeletalMesh->Vertices.size() << "\n\n";
+
+	int VertexCount = std::min((size_t)10, SkeletalMesh->Vertices.size());
+	for (int i = 0; i < VertexCount; i++)
+	{
+		const auto& Vertex = SkeletalMesh->Vertices[i];
+		OutFile << "Vertex [" << i << "]: Pos=(" << Vertex.pos.X << ", " << Vertex.pos.Y << ", " << Vertex.pos.Z << ")\n";
+		OutFile << "  BoneIndices=[" << Vertex.BoneIndices[0] << ", " << Vertex.BoneIndices[1] << ", "
+		        << Vertex.BoneIndices[2] << ", " << Vertex.BoneIndices[3] << "]\n";
+		OutFile << "  BoneWeights=[" << Vertex.BoneWeights[0] << ", " << Vertex.BoneWeights[1] << ", "
+		        << Vertex.BoneWeights[2] << ", " << Vertex.BoneWeights[3] << "]\n";
+	}
+	OutFile << "\n";
+
+	OutFile << "========================================\n";
+	OutFile << "END OF DEBUG INFO\n";
+	OutFile << "========================================\n";
+
+	OutFile.close();
+	UE_LOG("[FBX Dump] Successfully wrote debug info to: %s", OutputPath.c_str());
 }
 
 // ============================================================================
@@ -434,13 +727,8 @@ void FFbxImporter::ProcessMeshNode(
 					});
 			}
 
-			// 공통 메시 데이터 추출 (스켈레탈 모드 true)
-			ExtractCommonMeshData(Mesh, OutSkeletalMesh, MaterialIDToInfoMap, true,
-				[&](FFlesh& FleshSection)
-				{
-					//  원래 코드와 동일한 방식으로 스킨 데이터 추출
-					ExtractSkinningData(Mesh, FleshSection, BoneMap);
-				});
+			// 공통 메시 데이터 추출 (스켈레탈 모드 true, BoneMap 전달)
+			ExtractCommonMeshData(Mesh, OutSkeletalMesh, MaterialIDToInfoMap, true, nullptr, &BoneMap, this);
 		}
 	}
 	//  자식 노드 재귀 처리

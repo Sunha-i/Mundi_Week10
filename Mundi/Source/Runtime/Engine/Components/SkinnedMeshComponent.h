@@ -73,4 +73,8 @@ protected:
     USkeletalMesh* SkeletalMesh = nullptr;
     TArray<UMaterialInterface*> MaterialSlots;
     TArray<UMaterialInstanceDynamic*> DynamicMaterialInstances;
+
+    // CPU 스키닝용 동적 버텍스 버퍼
+    ID3D11Buffer* DynamicVertexBuffer = nullptr;
+    size_t DynamicVertexBufferSize = 0;
 };

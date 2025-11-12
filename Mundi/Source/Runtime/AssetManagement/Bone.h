@@ -53,6 +53,10 @@ public:
     FTransform GetBoneOffset();
     FMatrix GetSkinningMatrix();
 
+    // OffsetMatrix (Inverse BindPose World Matrix)
+    const FMatrix& GetOffsetMatrix() const;
+    void SetOffsetMatrix(const FMatrix& InOffsetMatrix);
+
     void SetParent(UBone* InParent);
     void AddChild(UBone* InChild);
     void RemoveChild(UBone* InChild);
@@ -68,7 +72,9 @@ private:
     FTransform RelativeTransform{};
     // 최초 뼈의 트랜스폼 정보를 저장
     FTransform BindPose{};
-    
+    // 역바인드 행렬 (Inverse of BindPose World Matrix)
+    FMatrix OffsetMatrix{};
+
     UBone* Parent{};
     TArray<UBone*> Children{};
 };

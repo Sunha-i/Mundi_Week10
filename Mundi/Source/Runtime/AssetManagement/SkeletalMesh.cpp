@@ -145,9 +145,18 @@ void USkeletalMesh::DuplicateSubObjects()
     // FSkeletalMesh 깊은 복사 (복사 생성자가 Skeleton과 Fleshes를 모두 복사함)
     if (SkeletalMeshAsset)
     {
-        Load(
-            SkeletalMeshAsset->PathFileName,
-            GEngine.GetRHIDevice()->GetDevice()
-        );
+        // ✅ 복사 생성자 사용: Skeleton 복사 + Flesh.Bones 재매핑
+        FSkeletalMesh* OriginalAsset = SkeletalMeshAsset;
+        SkeletalMeshAsset = new FSkeletalMesh(*OriginalAsset);
+
+        // GPU 버퍼 재생성
+        ID3D11Device* Device = GEngine.GetRHIDevice()->GetDevice();
+        CreateVertexBuffer(SkeletalMeshAsset, Device, GetVertexType());
+        CreateIndexBuffer(SkeletalMeshAsset, Device);
+        CreateLocalBound(SkeletalMeshAsset);
+
+        VertexCount = static_cast<uint32>(SkeletalMeshAsset->Vertices.size());
+        IndexCount = static_cast<uint32>(SkeletalMeshAsset->Indices.size());
+        CacheFilePath = SkeletalMeshAsset->CacheFilePath;
     }
 }

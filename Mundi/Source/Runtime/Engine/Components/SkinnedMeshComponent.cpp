@@ -4,6 +4,7 @@
 #include "MeshBatchElement.h"
 #include "SceneView.h"
 #include "WorldPartitionManager.h"
+#include "RHIDevice.h"
 
 IMPLEMENT_CLASS(USkinnedMeshComponent)
 
@@ -16,10 +17,17 @@ END_PROPERTIES()
 USkinnedMeshComponent::USkinnedMeshComponent() {}
 
 USkinnedMeshComponent::~USkinnedMeshComponent()
-{ 
+{
     if (SkeletalMesh)
         ObjectFactory::DeleteObject(SkeletalMesh);
     ClearDynamicMaterials();
+
+    // CPU 스키닝용 동적 버텍스 버퍼 해제
+    if (DynamicVertexBuffer)
+    {
+        DynamicVertexBuffer->Release();
+        DynamicVertexBuffer = nullptr;
+    }
 }
 
 void USkinnedMeshComponent::ClearDynamicMaterials()
@@ -47,8 +55,171 @@ void USkinnedMeshComponent::CollectMeshBatches(
         return;
     }
 
+    FSkeletalMesh* MeshAsset = SkeletalMesh->GetSkeletalMeshAsset();
     const TArray<FFlesh>& FleshesInfo = SkeletalMesh->GetFleshesInfo();
 
+    // ====== CPU 스키닝: 각 정점마다 본 변환 적용 ======
+    const TArray<FNormalVertex>& OriginalVertices = MeshAsset->Vertices;
+    TArray<FNormalVertex> TransformedVertices = OriginalVertices; // 복사본 생성
+
+    // Flesh의 Bones 리스트 사용 (첫 번째 섹션에 보통 모든 본이 있음)
+    const TArray<UBone*>* BoneListPtr = nullptr;
+    if (!FleshesInfo.IsEmpty() && FleshesInfo[0].Bones.size() > 0)
+    {
+        BoneListPtr = &FleshesInfo[0].Bones;
+    }
+
+    bool bDoSkinning = (BoneListPtr != nullptr);
+
+    // 본 리스트가 없으면 스키닝 없이 원본 버텍스 사용
+    if (!bDoSkinning)
+    {
+        UE_LOG("Warning: No Bones in Flesh, rendering without skinning");
+    }
+    else
+    {
+        UE_LOG("CPU Skinning: VertexCount=%d, BoneCount=%d", OriginalVertices.size(), BoneListPtr->size());
+    }
+
+    if (bDoSkinning)
+    {
+        for (size_t VertIdx = 0; VertIdx < TransformedVertices.size(); ++VertIdx)
+        {
+            FNormalVertex& Vertex = TransformedVertices[VertIdx];
+            const FNormalVertex& OriginalVertex = OriginalVertices[VertIdx];
+
+            // 스키닝 변환 적용 (최대 4개 본)
+            FVector TransformedPos(0.0f, 0.0f, 0.0f);
+            FVector TransformedNormal(0.0f, 0.0f, 0.0f);
+            float TotalWeight = 0.0f;
+
+        // 각 본의 영향을 가중치로 합산 (Row-major 행렬 곱셈)
+        for (int i = 0; i < 4; ++i)
+        {
+            uint32 BoneIdx = OriginalVertex.BoneIndices[i];
+            float Weight = OriginalVertex.BoneWeights[i];
+
+            if (Weight < 0.0001f)
+                continue;
+
+            const TArray<UBone*>& BoneList = *BoneListPtr;
+            if (BoneIdx >= BoneList.size())
+            {
+                UE_LOG("Warning: BoneIdx %d out of range (BoneList.size=%d)", BoneIdx, BoneList.size());
+                continue;
+            }
+
+            UBone* Bone = BoneList[BoneIdx];
+            if (!Bone)
+            {
+                UE_LOG("Warning: Bone at index %d is null", BoneIdx);
+                continue;
+            }
+
+            // BoneMatrix = OffsetMatrix * CurrentBoneWorld (Row-major)
+            FMatrix OffsetMatrix = Bone->GetOffsetMatrix();
+            FMatrix BoneWorldMatrix = Bone->GetWorldTransform().ToMatrix();
+           // FMatrix BoneMatrix = OffsetMatrix * BoneWorldMatrix;
+            FMatrix BoneMatrix = BoneWorldMatrix * OffsetMatrix ;
+
+            // 정점 변환 (Row-major): Vertex * Matrix
+            // Position 변환
+            FVector4 PosVec4(OriginalVertex.pos.X, OriginalVertex.pos.Y, OriginalVertex.pos.Z, 1.0f);
+            FVector4 TransformedPosVec4(
+                PosVec4.X * BoneMatrix.M[0][0] + PosVec4.Y * BoneMatrix.M[1][0] + PosVec4.Z * BoneMatrix.M[2][0] + PosVec4.W * BoneMatrix.M[3][0],
+                PosVec4.X * BoneMatrix.M[0][1] + PosVec4.Y * BoneMatrix.M[1][1] + PosVec4.Z * BoneMatrix.M[2][1] + PosVec4.W * BoneMatrix.M[3][1],
+                PosVec4.X * BoneMatrix.M[0][2] + PosVec4.Y * BoneMatrix.M[1][2] + PosVec4.Z * BoneMatrix.M[2][2] + PosVec4.W * BoneMatrix.M[3][2],
+                PosVec4.X * BoneMatrix.M[0][3] + PosVec4.Y * BoneMatrix.M[1][3] + PosVec4.Z * BoneMatrix.M[2][3] + PosVec4.W * BoneMatrix.M[3][3]
+            );
+
+            TransformedPos += FVector(TransformedPosVec4.X, TransformedPosVec4.Y, TransformedPosVec4.Z) * Weight;
+
+            // Normal 변환 (w=0, translation 무시)
+            FVector4 NormalVec4(OriginalVertex.normal.X, OriginalVertex.normal.Y, OriginalVertex.normal.Z, 0.0f);
+            FVector4 TransformedNormalVec4(
+                NormalVec4.X * BoneMatrix.M[0][0] + NormalVec4.Y * BoneMatrix.M[1][0] + NormalVec4.Z * BoneMatrix.M[2][0],
+                NormalVec4.X * BoneMatrix.M[0][1] + NormalVec4.Y * BoneMatrix.M[1][1] + NormalVec4.Z * BoneMatrix.M[2][1],
+                NormalVec4.X * BoneMatrix.M[0][2] + NormalVec4.Y * BoneMatrix.M[1][2] + NormalVec4.Z * BoneMatrix.M[2][2],
+                0.0f
+            );
+
+            TransformedNormal += FVector(TransformedNormalVec4.X, TransformedNormalVec4.Y, TransformedNormalVec4.Z) * Weight;
+            TotalWeight += Weight;
+        }
+
+        // 가중치가 0이면 원본 위치 사용 (리지드 정점)
+        if (TotalWeight < 0.0001f)
+        {
+            // 가중치가 없는 정점은 원본 그대로
+            continue;
+        }
+
+        // 변환된 위치와 노말 저장
+        Vertex.pos = TransformedPos;
+        float NormalLengthSq = TransformedNormal.X * TransformedNormal.X +
+                                TransformedNormal.Y * TransformedNormal.Y +
+                                TransformedNormal.Z * TransformedNormal.Z;
+        if (NormalLengthSq > 0.0001f)
+        {
+            TransformedNormal.Normalize();
+            Vertex.normal = TransformedNormal;
+        }
+
+            // 첫 번째 정점 디버그 로그
+            if (VertIdx == 0)
+            {
+                UE_LOG("First Vertex - Original: (%.3f, %.3f, %.3f), Transformed: (%.3f, %.3f, %.3f), TotalWeight: %.3f",
+                    OriginalVertex.pos.X, OriginalVertex.pos.Y, OriginalVertex.pos.Z,
+                    Vertex.pos.X, Vertex.pos.Y, Vertex.pos.Z,
+                    TotalWeight);
+            }
+        }
+    }
+
+    // ====== Dynamic Vertex Buffer 생성/업데이트 ======
+    ID3D11Device* Device = GEngine.GetRHIDevice()->GetDevice();
+    ID3D11DeviceContext* Context = GEngine.GetRHIDevice()->GetDeviceContext();
+
+    size_t RequiredSize = TransformedVertices.size() * sizeof(FNormalVertex);
+    if (!DynamicVertexBuffer || DynamicVertexBufferSize < RequiredSize)
+    {
+        if (DynamicVertexBuffer)
+        {
+            DynamicVertexBuffer->Release();
+            DynamicVertexBuffer = nullptr;
+        }
+
+        D3D11_BUFFER_DESC BufferDesc = {};
+        BufferDesc.ByteWidth = (UINT)RequiredSize;
+        BufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+        BufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        BufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        D3D11_SUBRESOURCE_DATA InitData = {};
+        InitData.pSysMem = TransformedVertices.data();
+
+        HRESULT hr = Device->CreateBuffer(&BufferDesc, &InitData, &DynamicVertexBuffer);
+        if (FAILED(hr))
+        {
+            UE_LOG("Failed to create dynamic vertex buffer for skinned mesh");
+            return;
+        }
+
+        DynamicVertexBufferSize = RequiredSize;
+    }
+    else
+    {
+        // 기존 버퍼 업데이트
+        D3D11_MAPPED_SUBRESOURCE MappedResource;
+        HRESULT hr = Context->Map(DynamicVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
+        if (SUCCEEDED(hr))
+        {
+            memcpy(MappedResource.pData, TransformedVertices.data(), RequiredSize);
+            Context->Unmap(DynamicVertexBuffer, 0);
+        }
+    }
+
+    // ====== Mesh Batch 생성 ======
     auto DetermineMaterialAndShader = [&](uint32 SectionIndex) -> TPair<UMaterialInterface*, UShader*>
     {
         UMaterialInterface* Material = GetMaterial(SectionIndex);
@@ -60,7 +231,6 @@ void USkinnedMeshComponent::CollectMeshBatches(
         }
         else
         {
-            // Material이 없으면 기본 Material 사용 (매 프레임 호출되므로 로그 제거)
             Material = UResourceManager::GetInstance().GetDefaultMaterial();
             if (Material)
             {
@@ -81,12 +251,11 @@ void USkinnedMeshComponent::CollectMeshBatches(
     {
         uint32 IndexCount = 0;
         uint32 StartIndex = 0;
-        const FFlesh& Flesh = FleshesInfo[SectionIndex];
 
         if (bHasSections)
         {
-            IndexCount = Flesh.IndexCount;
-            StartIndex = Flesh.StartIndex;
+            IndexCount = FleshesInfo[SectionIndex].IndexCount;
+            StartIndex = FleshesInfo[SectionIndex].StartIndex;
         }
         else
         {
@@ -106,7 +275,6 @@ void USkinnedMeshComponent::CollectMeshBatches(
         }
 
         FMeshBatchElement BatchElement;
-        // View 모드 전용 매크로와 머티리얼 개인 매크로를 결합한다
         TArray<FShaderMacro> ShaderMacros = View->ViewShaderMacros;
         if (0 < MaterialToUse->GetShaderMacros().Num())
         {
@@ -121,32 +289,16 @@ void USkinnedMeshComponent::CollectMeshBatches(
             BatchElement.InputLayout = ShaderVariant->InputLayout;
         }
 
-        // UMaterialInterface를 UMaterial로 캐스팅해야 할 수 있음. 렌더러가 UMaterial을 기대한다면.
-        // 지금은 Material.h 구조상 UMaterialInterface에 필요한 정보가 다 있음.
         BatchElement.Material = MaterialToUse;
-        BatchElement.VertexBuffer = SkeletalMesh->GetVertexBuffer();
+        BatchElement.VertexBuffer = DynamicVertexBuffer; // CPU 스키닝된 버퍼 사용
         BatchElement.IndexBuffer = SkeletalMesh->GetIndexBuffer();
-        BatchElement.VertexStride = SkeletalMesh->GetVertexStride();
+        BatchElement.VertexStride = sizeof(FNormalVertex);
         BatchElement.IndexCount = IndexCount;
         BatchElement.StartIndex = StartIndex;
         BatchElement.BaseVertexIndex = 0;
 
-        // 본의 가중치 적용 - 각 본의 Skinning Matrix를 가중치로 블렌딩
-        FMatrix SkinningMatrix; // 0으로 초기화됨
-        for (int32 i = 0; i < Flesh.Bones.size(); i++)
-        {
-            UBone* Bone = Flesh.Bones[i];
-            if (!Bone)
-                continue;
-
-            float Weight = Flesh.Weights[i];
-            FMatrix BoneMatrix = Bone->GetSkinningMatrix();
-
-            // 행렬의 각 요소를 가중치로 블렌딩
-            SkinningMatrix += BoneMatrix * Weight;
-        }
-
-        BatchElement.WorldMatrix = GetWorldMatrix() * SkinningMatrix;
+        // 월드 행렬은 컴포넌트 월드 행렬만 사용 (스키닝은 이미 정점에 적용됨)
+        BatchElement.WorldMatrix = GetWorldMatrix();
         BatchElement.ObjectID = InternalIndex;
         BatchElement.PrimitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 

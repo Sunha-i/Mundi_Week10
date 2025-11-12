@@ -128,6 +128,10 @@ struct FNormalVertex
     FVector4 Tangent;
     FVector4 color;
 
+    // 스키닝 정보 (최대 4개 본 영향)
+    uint32 BoneIndices[4] = {0, 0, 0, 0};
+    float BoneWeights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
     friend FArchive& operator<<(FArchive& Ar, FNormalVertex& Vtx)
     {
         // Serialize member by member to avoid issues with struct padding and alignment
@@ -136,6 +140,11 @@ struct FNormalVertex
         Ar << Vtx.Tangent;
         Ar << Vtx.color;
         Ar << Vtx.tex;
+
+        // 스키닝 정보 직렬화
+        Ar.Serialize(Vtx.BoneIndices, sizeof(uint32) * 4);
+        Ar.Serialize(Vtx.BoneWeights, sizeof(float) * 4);
+
         return Ar;
     }
 };

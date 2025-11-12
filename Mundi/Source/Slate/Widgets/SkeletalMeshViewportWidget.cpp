@@ -507,6 +507,16 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		{
 			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
 			SelectedBone->SetRelativeTransform(NewTransform);
+
+			// 디버그: 본 수정 후 확인
+			FVector WorldLoc = SelectedBone->GetWorldLocation();
+			FVector BindPoseLoc = SelectedBone->GetWorldBindPoseLocation();
+			UE_LOG("[UI] Bone '%s' (%p) Modified!",
+				SelectedBone->GetName().ToString().c_str(), SelectedBone);
+			UE_LOG("[UI]   RelLoc: (%.2f, %.2f, %.2f)", RelLoc.X, RelLoc.Y, RelLoc.Z);
+			UE_LOG("[UI]   WorldLoc: (%.2f, %.2f, %.2f)", WorldLoc.X, WorldLoc.Y, WorldLoc.Z);
+			UE_LOG("[UI]   BindPoseLoc: (%.2f, %.2f, %.2f)", BindPoseLoc.X, BindPoseLoc.Y, BindPoseLoc.Z);
+
 			MarkSkeletonOverlayDirty();
 		}
 
@@ -591,42 +601,56 @@ void USkeletalMeshViewportWidget::ToggleSkeletonOverlay(bool bEnable)
 		ClearSkeletonOverlay(false);
 	}
 }
-
 void USkeletalMeshViewportWidget::UpdateSkeletonOverlayIfNeeded()
 {
+	// [1] 뼈대 표시 기능이 꺼져 있다면 바로 종료
+	// → "Skeleton Overlay" 체크박스가 꺼져 있는 경우
 	if (!bShowSkeletonOverlay)
 	{
 		return;
 	}
 
+	//  [2] 현재 미리보기 중인 SkeletalMeshActor 가져오기
+	// → Viewport 안에 표시되는 임시 액터
 	ASkeletalMeshActor* SkeletalActor = GetPreviewActor();
 	if (!SkeletalActor)
 	{
-		return;
+		return; // 없으면 아무 것도 하지 않음
 	}
 
-	// Ensure overlay component exists
+	//[3] Skeleton을 그릴 LineComponent 확보
+	// → WorldForPreviewManager는 "임시 미리보기 월드"를 관리함
 	ULineComponent* SkeletonLineComponent = nullptr;
 	if (UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview())
 	{
+		// 액터에 SkeletonOverlay용 LineComponent가 없으면 새로 생성함
 		SkeletonLineComponent = SkeletalActor->EnsureSkeletonOverlay(PreviewWorld);
 	}
+
+	// Overlay 생성 실패 시 조기 리턴
 	if (!SkeletonLineComponent)
 	{
 		return;
 	}
 
-	// Show existing lines if not dirty
+	//  [4] 이미 스켈레톤 라인이 있고, 갱신이 필요하지 않다면 그대로 표시만 함
+	// → bSkeletonLinesDirty == false → 이전 프레임과 동일한 본 구조
 	if (!bSkeletonLinesDirty && SkeletonLineComponent->GetLineCount() > 0)
 	{
-		SkeletonLineComponent->SetLineVisible(true);
+		SkeletonLineComponent->SetLineVisible(true); // 숨김 상태였다면 다시 보이게만 설정
 		return;
 	}
 
-	// Delegate skeleton building to the actor (선택된 본 정보 전달)
+	// [5] 위의 조건을 통과했다면 (=새로 그려야 함)
+	// 액터에게 "스켈레톤 라인 다시 만들어라" 요청함
+	// → BuildSkeletonOverlay는 본 계층 구조를 순회하면서 라인 생성
+	// → SelectedBone 인자로 현재 선택된 본 정보 전달
 	SkeletalActor->BuildSkeletonOverlay(SelectedBone);
+
+	// 🟢 [6] 더 이상 Dirty하지 않다고 표시 (다음 프레임엔 재갱신 생략)
 	bSkeletonLinesDirty = false;
 }
+
 
 void USkeletalMeshViewportWidget::ClearSkeletonOverlay(bool bReleaseComponent)
 {
