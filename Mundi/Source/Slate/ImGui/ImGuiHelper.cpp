@@ -56,6 +56,9 @@ void UImGuiHelper::Initialize(HWND InWindowHandle, ID3D11Device* InDevice, ID3D1
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
+	// 창 본문 클릭해서 움직이는 기능 비활성화, 제목 표시줄로만 움직이게 설정함
+	ImGui::GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
+	
 	// 커스텀 다크 테마 적용
 	SetupCustomTheme();
 

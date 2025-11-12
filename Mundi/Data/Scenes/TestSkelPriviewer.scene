@@ -1,17 +1,17 @@
 {
   "Actors" : {
-    "1506" : {
-      "ObjectName" : "ADirectionalLightActor_3",
+    "1160" : {
+      "ObjectName" : "ADirectionalLightActor_1",
       "OwnedComponents" : [{
           "CascadedAreaColorDebugValue" : 0.000000,
           "CascadedAreaShadowDebugValue" : -1,
           "CascadedCount" : 4,
           "CascadedLinearBlendingValue" : 0.500000,
           "CascadedOverlapValue" : 0.200000,
-          "Id" : 1507,
+          "Id" : 1161,
           "Intensity" : 1.000000,
           "LightColor" : [1.000000, 1.000000, 1.000000, 1.000000],
-          "ObjectName" : "UDirectionalLightComponent_4",
+          "ObjectName" : "UDirectionalLightComponent_1",
           "ParentId" : 0,
           "RelativeLocation" : [0.000000, 0.000000, 0.000000],
           "RelativeRotationEuler" : [-62.900280, 16.769619, -62.900280],
@@ -30,19 +30,19 @@
           "bOverrideCameraLightPerspective" : false,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1507,
+      "RootComponentId" : 1161,
       "Tag" : "",
       "Type" : "ADirectionalLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1508" : {
-      "ObjectName" : "AAmbientLightActor_3",
+    "1162" : {
+      "ObjectName" : "AAmbientLightActor_1",
       "OwnedComponents" : [{
-          "Id" : 1509,
+          "Id" : 1163,
           "Intensity" : 0.100000,
           "LightColor" : [1.000000, 1.000000, 1.000000, 1.000000],
-          "ObjectName" : "UAmbientLightComponent_4",
+          "ObjectName" : "UAmbientLightComponent_1",
           "ParentId" : 0,
           "RelativeLocation" : [0.000000, 0.000000, 0.000000],
           "RelativeRotationEuler" : [0.000000, 0.000000, 0.000000],
@@ -59,17 +59,17 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1509,
+      "RootComponentId" : 1163,
       "Tag" : "",
       "Type" : "AAmbientLightActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1513" : {
-      "ObjectName" : "APlayerCameraManager_3",
+    "1170" : {
+      "ObjectName" : "APlayerCameraManager_1",
       "OwnedComponents" : [{
-          "Id" : 1514,
-          "ObjectName" : "USceneComponent_4",
+          "Id" : 1171,
+          "ObjectName" : "USceneComponent_1",
           "ParentId" : 0,
           "RelativeLocation" : [0.000000, 0.000000, 0.000000],
           "RelativeRotationEuler" : [0.000000, 0.000000, 0.000000],
@@ -80,27 +80,42 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1514,
+      "RootComponentId" : 1171,
       "Tag" : "",
       "TransitionCurve" : [0.470000, 0.000000, 0.745000, 0.715000],
       "Type" : "APlayerCameraManager",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     },
-    "1516" : {
-      "ObjectName" : "스켈레탈 메시_1",
+    "1773" : {
+      "ObjectName" : "스켈레탈 메시_0",
       "OwnedComponents" : [{
-          "Id" : 1517,
+          "Id" : 1774,
           "MaterialSlots" : [{
-              "AssetPath" : "Ch46_body",
+              "AssetPath" : "MI_Quinn_01",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_02",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_01",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_02",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_01",
+              "Type" : "UMaterial"
+            }, {
+              "AssetPath" : "MI_Quinn_02",
               "Type" : "UMaterial"
             }],
-          "ObjectName" : "USkeletalMeshComponent_2",
+          "ObjectName" : "USkeletalMeshComponent_1",
           "ParentId" : 0,
-          "RelativeLocation" : [0.407532, 160.170609, 142.677322],
+          "RelativeLocation" : [0.964766, -1.185648, 0.227668],
           "RelativeRotationEuler" : [0.000000, -0.000000, 0.000000],
           "RelativeScale" : [1.000000, 1.000000, 1.000000],
-          "SkeletalMesh" : "Data/Fbx/Yunsoo/Ch46_nonPBR.fbx",
+          "SkeletalMesh" : "Data/Fbx/test/SKM_Quinn_Simple.FBX",
           "Type" : "USkeletalMeshComponent",
           "bBlockComponent" : false,
           "bGenerateOverlapEvents" : true,
@@ -109,20 +124,20 @@
           "bIsVisible" : true,
           "bTickEnabled" : true
         }],
-      "RootComponentId" : 1517,
+      "RootComponentId" : 1774,
       "Tag" : "",
       "Type" : "ASkeletalMeshActor",
       "bActorHiddenInGame" : false,
       "bActorIsActive" : true
     }
   },
-  "NextUUID" : 1585,
+  "NextUUID" : 4800,
   "PerspectiveCamera" : {
     "FOV" : [60.000000],
     "FarClip" : [2000.000000],
-    "Location" : [0.178508, 167.075638, 149.906998],
+    "Location" : [3.211080, -0.858478, 2.394477],
     "NearClip" : [0.100000],
-    "Rotation" : [0.000000, 32.800037, -92.900330]
+    "Rotation" : [0.000000, 30.799986, 179.299942]
   },
   "Version" : 1
 }

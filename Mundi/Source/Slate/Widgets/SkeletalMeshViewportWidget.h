@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "Widgets/Widget.h"
-#include "FPreviewScene.h"
+#include "SkelMeshPreviewScene.h"
 #include "FViewport.h"
 
 class USkeletalMesh;
@@ -39,10 +39,14 @@ private:
 	// Preview RenderTarget 관리
 	bool CreatePreviewRenderTarget(uint32 Width, uint32 Height);
 	void ReleasePreviewRenderTarget();
+	
+	// About Gizmo
+	void UpdateGizmoVisibility();
+	void UpdateGizmoTransform();
 
 public:
 	FName TargetMeshName{};
-	FPreviewScene WorldForPreviewManager;
+	FSkeletalMeshPreviewScene WorldForPreviewManager;
 	FViewport Viewport;
 
 private:
@@ -63,6 +67,19 @@ private:
 	uint32 PreviewTextureWidth = 0;
 	uint32 PreviewTextureHeight = 0;
 
-	// 선택된 Bone
+	// SelectedInfo
 	class UBone* SelectedBone = nullptr;
+	EGizmoMode CurrentGizmoMode = EGizmoMode::Translate;
+	EGizmoSpace CurrentGizmoSpace = EGizmoSpace::Local;
+
+	// GizmoInteractionStatus
+	bool bIsGizmoDragging = false;
+	uint32 HoveredGizmoAxis = 0;
+	uint32 DraggingGizmoAxis = 0;
+
+	// DragStartStatusInfo
+	FTransform DragStartBoneTransfrom;
+	FVector2D DragStartMousePosition;
+	FVector DragImpactPoint;
+	FVector2D DragScreenVector;
 };

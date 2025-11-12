@@ -59,15 +59,20 @@ public:
     void OnDrag(USceneComponent* Target, uint32 GizmoAxis, float MouseDeltaX, float MouseDeltaY, const ACameraActor* Camera, FViewport* Viewport);
     void OnDrag(USceneComponent* Target, uint32 GizmoAxis, float MouseDeltaX, float MouseDeltaY, const ACameraActor* Camera);
     
-    // Gizmo interaction methods
    // void SetTargetActor(AActor* InTargetActor) { TargetActor = InTargetActor; Tick(0.f);  }
     void SetEditorCameraActor(ACameraActor* InCameraActor) { CameraActor = InCameraActor; }
     ACameraActor* GetEditorCameraActor() const { return CameraActor; }
     
-
+    // Gizmo interaction methods
     void ProcessGizmoInteraction(ACameraActor* Camera, FViewport* Viewport, float MousePositionX, float MousePositionY);
     void ProcessGizmoModeSwitch();
-
+    void ApplyGizmoVisualState(bool bInHasSelection, EGizmoMode InCurrentMode, uint32 InHighlightAxis);
+    
+    FTransform CalculateDragTransform(const FTransform& InStartTransform, const FVector2D& InMouseOffset, const ACameraActor* InCamera, 
+        FViewport* InViewport, EGizmoMode InCurrentMode, EGizmoSpace InCurrentSpace, uint32 InDraggingAxis, const FVector2D& InDragScreenVector);
+    FVector2D CalculateRotationDragVector(uint32 InDraggingAxis, EGizmoSpace InCurrentSpace,
+        const FTransform& InStartTransform, const FVector& InDragImpactPoint, const ACameraActor* InCamera);
+    
     // 어차피 gizmo가 게임모드에서 안나오니까 할 필요 없을지도?
     // ───── 복사 관련 ────────────────────────────
     /*void DuplicateSubObjects() override;

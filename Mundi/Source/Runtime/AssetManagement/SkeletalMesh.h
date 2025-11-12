@@ -33,6 +33,7 @@ public:
 
     // CPU Skinning - 매 프레임 정점 변환
     void UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext);
+    void MarkAsDirty();
 
     // Serialization & Duplication
     virtual void Serialize(const bool bInIsLoading, JSON& InOutHandle) override;
@@ -47,4 +48,7 @@ private:
 
     // Dynamic Vertex Buffer 생성 (CPU 쓰기 가능)
     void CreateDynamicVertexBuffer(ID3D11Device* Device, int VertexCount);
+
+public:
+    bool UpdateCPUSkinningDirty = true;
 };

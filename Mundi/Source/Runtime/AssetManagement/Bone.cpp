@@ -216,16 +216,6 @@ FMatrix UBone::GetSkinningMatrix()
     return CurrentWorldMatrix * InverseBindPoseMatrix;
 }
 
-void UBone::SetParent(UBone* InParent)
-{
-    Parent = InParent;
-}
-
-UBone* UBone::GetParent() const
-{
-    return Parent;
-}
-
 void UBone::AddChild(UBone* InChild)
 {
     if (!InChild)

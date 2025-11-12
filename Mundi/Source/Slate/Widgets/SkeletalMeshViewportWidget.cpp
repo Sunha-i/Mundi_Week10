@@ -21,9 +21,8 @@ IMPLEMENT_CLASS(USkeletalMeshViewportWidget)
 USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 {
 	WorldForPreviewManager.CreateWorldForPreviewScene();
-	WorldForPreviewManager.SetDirectionalLight(
-		{ 0.f, 0.f, 180.f }, {0.f,0.f,-90.f}
-	);
+	WorldForPreviewManager.SetDirectionalLight({ 0.f, 0.f, 180.f }, { 0.f,0.f,-90.f });
+	WorldForPreviewManager.SetGizmo();
 
 	// ViewportClient 생성 (내부적으로 Camera 생성)
 	Viewport.SetViewportClient(new FViewportClient());
@@ -99,23 +98,12 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 		PreviewActor = nullptr;
 	}
 
-	// Actor 생성 및 Mesh 설정
-	ASkeletalMeshActor* SkeletalMeshActor = NewObject<ASkeletalMeshActor>();
-
-	USkeletalMeshComponent* MeshComp = SkeletalMeshActor->GetSkeletalMeshComponent();
-	if (MeshComp)
-	{
-		MeshComp->SetSkeletalMesh(TargetMeshName.ToString());
-	}
-	else
-	{
-		UE_LOG("[SkeletalMeshViewportWidget] Error: SkeletalMeshComponent is null");
-	}
-
-	WorldForPreviewManager.SetActor(SkeletalMeshActor);
+	WorldForPreviewManager.SetSkelMeshActor(TargetMeshName.ToString());
+	ASkeletalMeshActor* SkeletalMeshActor = WorldForPreviewManager.GetSkelMeshActor();
 	PreviewWorld->AddEditorActor(SkeletalMeshActor);
 	PreviewActor = SkeletalMeshActor;
 	MarkSkeletonOverlayDirty();
+	UpdateGizmoVisibility();
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -208,7 +196,7 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 {
 	if (!Bone) return;
 
-	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_DefaultOpen;
 
 	// 선택된 Bone이면 하이라이트
 	if (Bone == SelectedBone)
@@ -225,6 +213,7 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 	{
 		SelectedBone = Bone;
 		MarkSkeletonOverlayDirty(); // 선택 변경 시 스켈레톤 오버레이 다시 그리기
+		UpdateGizmoTransform();
 	}
 
 	// 자식이 있으면 재귀적으로 렌더링
@@ -246,6 +235,15 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		ImGui::Separator();
 		ImGui::Text("Mesh: %s", TargetMeshName.ToString().c_str());
 		ImGui::Separator();
+
+		// Switch mode via space input
+		if (ImGui::IsKeyPressed(ImGuiKey_Space))
+		{
+			int GizmoModeIndex = static_cast<int>(CurrentGizmoMode);
+			GizmoModeIndex = (GizmoModeIndex + 1) % static_cast<int>(EGizmoMode::Select);
+			CurrentGizmoMode = static_cast<EGizmoMode>(GizmoModeIndex);
+			UpdateGizmoVisibility();
+		}
 
 		const bool bHasMeshLoaded = HasLoadedSkeletalMesh();
 		ImGui::BeginDisabled(!bHasMeshLoaded);
@@ -303,6 +301,113 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 			// ImGui에 PreviewSRV 표시 (동적 크기)
 			ImGui::Image((void*)PreviewSRV, ImVec2(newWidth, newHeight));
+
+			// +-+-+ Gizmo Interaction Logic +-+-+
+			if (SelectedBone)
+			{
+				AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+				bool bIsViewportHovered = ImGui::IsItemHovered();
+
+				// 1. Hovering (Picking)
+				if (bIsViewportHovered && !bIsGizmoDragging)
+				{
+					ImVec2 Min = ImGui::GetItemRectMin();
+					ImVec2 Max = ImGui::GetItemRectSize();
+					ImVec2 MouseAbs = ImGui::GetMousePos();
+					FVector2D ViewportMousePos(MouseAbs.x - Min.x, MouseAbs.y - Min.y);
+					FVector2D ViewportSize(Max.x, Max.y);
+
+					HoveredGizmoAxis = CPickingSystem::IsHoveringGizmoForViewport(
+						Gizmo, PreviewCamera, ViewportMousePos, ViewportSize,
+						FVector2D(0, 0), &Viewport, DragImpactPoint
+					);
+
+					UE_LOG("Hovered Axis: %d", HoveredGizmoAxis);
+					UpdateGizmoVisibility();
+				}
+
+				// 2. Drag Start
+				if (bIsViewportHovered && HoveredGizmoAxis > 0 && ImGui::IsMouseClicked(0))
+				{
+					bIsGizmoDragging = true;
+					DraggingGizmoAxis = HoveredGizmoAxis;
+					DragStartMousePosition = FVector2D(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
+					DragStartBoneTransfrom = SelectedBone->GetWorldTransform();
+
+					if (CurrentGizmoMode == EGizmoMode::Rotate)
+					{
+						// AGizmoActor::ProcessGizmoDragging logic
+						FVector WorldAxis(0.f), LocalAxisVector(0.f);
+						switch (DraggingGizmoAxis) {
+						case 1: LocalAxisVector = FVector(1, 0, 0); break;
+						case 2: LocalAxisVector = FVector(0, 1, 0); break;
+						case 3: LocalAxisVector = FVector(0, 0, 1); break;
+						}
+
+						if (CurrentGizmoSpace == EGizmoSpace::World)
+						{
+							WorldAxis = LocalAxisVector;
+						}
+						else if (CurrentGizmoSpace == EGizmoSpace::Local)
+						{
+							WorldAxis = DragStartBoneTransfrom.Rotation.RotateVector(LocalAxisVector);
+						}
+
+						FVector ClickVector = DragImpactPoint - DragStartBoneTransfrom.Translation;
+						FVector Tangent3D = FVector::Cross(WorldAxis, ClickVector);
+						float RightDot = FVector::Dot(Tangent3D, PreviewCamera->GetRight());
+						float UpDot = FVector::Dot(Tangent3D, PreviewCamera->GetUp());
+						DragScreenVector = FVector2D(RightDot, -UpDot);
+						DragScreenVector = DragScreenVector.GetNormalized();
+					}
+				}
+			}
+			else
+			{
+				HoveredGizmoAxis = 0;
+				UpdateGizmoVisibility();
+			}
+
+			// 3. Drag Continue & End
+			if (bIsGizmoDragging)
+			{
+				if (ImGui::IsMouseDown(0))
+				{
+					FVector2D CurrentMousePosition(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
+					FVector2D MouseOffset = CurrentMousePosition - DragStartMousePosition;
+
+					AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+					FTransform NewWorldTransform = Gizmo->CalculateDragTransform(
+						DragStartBoneTransfrom, MouseOffset, PreviewCamera, &Viewport,
+					    CurrentGizmoMode, CurrentGizmoSpace, DraggingGizmoAxis, DragScreenVector
+					);
+
+					// Get the parent bone's world transform
+					FTransform ParentWorldTransform;
+					if (UBone* ParentBone = SelectedBone->GetParent())
+					{
+						ParentWorldTransform = ParentBone->GetWorldTransform();
+					}
+					else if (ASkeletalMeshActor * SkelActor = GetPreviewActor())
+					{
+						if (USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent())
+						{
+							ParentWorldTransform = MeshComp->GetWorldTransform();
+						}
+					}
+
+					FTransform NewRelativeTransform = ParentWorldTransform.GetRelativeTransform(NewWorldTransform);
+					SelectedBone->SetRelativeTransform(NewRelativeTransform);
+					UpdateGizmoTransform();
+				}
+
+				if (ImGui::IsMouseReleased(0))
+				{
+					bIsGizmoDragging = false;
+					DraggingGizmoAxis = 0;
+					UpdateGizmoVisibility();
+				}
+			}
 
 			// 1) 드래그 시작 조건: ImGui::Image 위에서 우클릭을 시작했을 때
 			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1))		// 1: MouseRight (Only process RT)
@@ -403,37 +508,7 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		ImGui::Text("Parent:");
 		ImGui::Indent();
 
-		UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview();
-		UBone* ParentBone = nullptr;
-		if (PreviewWorld && !PreviewWorld->GetActors().empty())
-		{
-			for (AActor* Actor : PreviewWorld->GetActors())
-			{
-				if (ASkeletalMeshActor* SkelActor = Cast<ASkeletalMeshActor>(Actor))
-				{
-					USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent();
-					if (MeshComp && MeshComp->GetSkeletalMesh())
-					{
-						USkeleton* Skeleton = MeshComp->GetSkeletalMesh()->GetSkeletalMeshAsset()->Skeleton;
-						if (Skeleton)
-						{
-							// Root부터 재귀적으로 Parent 찾기
-							Skeleton->ForEachBone([&](UBone* Bone) {
-								for (UBone* Child : Bone->GetChildren())
-								{
-									if (Child == SelectedBone)
-									{
-										ParentBone = Bone;
-										return;
-									}
-								}
-							});
-						}
-					}
-					break;
-				}
-			}
-		}
+		UBone* ParentBone = SelectedBone->GetParent();
 
 		ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "%s", ParentBone ? ParentBone->GetName().ToString().c_str() : "(Root)");
 		ImGui::Unindent();
@@ -503,10 +578,13 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		bChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
 		ImGui::PopID();
 
+		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
+		
 		// 값이 변경되면 적용
 		if (bChanged)
 		{
 			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
+			SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 			SelectedBone->SetRelativeTransform(NewTransform);
 			MarkSkeletonOverlayDirty();
 		}
@@ -550,6 +628,27 @@ void USkeletalMeshViewportWidget::ReleasePreviewRenderTarget()
 
 	PreviewTextureWidth = 0;
 	PreviewTextureHeight = 0;
+}
+
+void USkeletalMeshViewportWidget::UpdateGizmoVisibility()
+{
+	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+	if (!Gizmo)    return;
+
+	bool bHasSelection = (SelectedBone != nullptr);
+	Gizmo->ApplyGizmoVisualState(bHasSelection, CurrentGizmoMode, HoveredGizmoAxis);
+}
+
+void USkeletalMeshViewportWidget::UpdateGizmoTransform()
+{
+	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+	if (!Gizmo)    return;
+
+	if (!SelectedBone)	return;
+	const FTransform BoneWorldTransform = SelectedBone->GetWorldTransform();
+	
+	Gizmo->SetActorLocation(BoneWorldTransform.Translation);
+	Gizmo->SetActorRotation(BoneWorldTransform.Rotation);
 }
 
 bool USkeletalMeshViewportWidget::HasLoadedSkeletalMesh() const

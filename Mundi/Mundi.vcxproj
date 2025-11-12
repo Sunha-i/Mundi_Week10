@@ -313,7 +313,8 @@
     <ClCompile Include="Source\Runtime\Renderer\PostProcessing\VignettePass.cpp" />
     <ClCompile Include="Source\Runtime\Renderer\SceneView.cpp" />
     <ClCompile Include="Source\Runtime\Renderer\TileLightCuller.cpp" />
-    <ClCompile Include="Source\Slate\FPreviewScene.cpp" />
+    <ClCompile Include="Source\Slate\PreviewScene.cpp" />
+    <ClCompile Include="Source\Slate\SkelMeshPreviewScene.cpp" />
     <ClCompile Include="Source\Slate\Widgets\PropertyRenderer.cpp" />
     <ClCompile Include="Source\Slate\Widgets\SkeletalMeshViewportWidget.cpp" />
     <ClCompile Include="Source\Slate\Windows\SkeletalMeshViewerWindow.cpp" />
@@ -640,7 +641,8 @@
     <ClInclude Include="Source\Runtime\Renderer\TileLightCuller.h" />
     <ClInclude Include="Source\Runtime\RHI\SwapGuard.h" />
     <ClInclude Include="Source\Runtime\RHI\ConstantBufferType.h" />
-    <ClInclude Include="Source\Slate\FPreviewScene.h" />
+    <ClInclude Include="Source\Slate\PreviewScene.h" />
+    <ClInclude Include="Source\Slate\SkelMeshPreviewScene.h" />
     <ClInclude Include="Source\Slate\Widgets\PropertyRenderer.h" />
     <ClInclude Include="Source\Slate\Widgets\SkeletalMeshViewportWidget.h" />
     <ClInclude Include="Source\Slate\Windows\SkeletalMeshViewerWindow.h" />
