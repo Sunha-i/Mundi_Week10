@@ -50,7 +50,7 @@ public:
     const FTransform& GetWorldBindPose() const;
 
     // CPU Skinning 최적화: WorldBindPose와 InverseBindPoseMatrix 캐싱
-    const FMatrix& GetInverseBindPoseMatrix() const;
+    FMatrix GetInverseBindPoseMatrix() const;
     void CacheWorldBindPose();  // Skeleton 로드 후 한 번만 호출
 
     // BindPos와 현 Transform의 차이를 반환

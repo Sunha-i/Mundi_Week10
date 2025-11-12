@@ -239,11 +239,11 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             BoneToIndexMap.Add(Bone, BoneIndex);
 
             // 스키닝 행렬 계산 및 캐시
-            const FMatrix& InverseBindPoseMatrix = Bone->GetInverseBindPoseMatrix();
+            FMatrix InverseBindPoseMatrix = Bone->GetInverseBindPoseMatrix();
             FMatrix CurrentWorldMatrix = Bone->GetWorldTransform().ToMatrix();
             FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
-
             BoneMatrices.Add(SkinningMatrix);
+
             BoneIndex++;
         }
     });

@@ -7,6 +7,8 @@ BEGIN_PROPERTIES(UBone)
     ADD_PROPERTY(FName, Name, "[데이터]", true, "뼈의 이름입니다")
     ADD_PROPERTY(FTransform, RelativeTransform, "[데이터]", true, "뼈의 로컬 트랜스폼입니다")
     ADD_PROPERTY(FTransform, BindPose, "[데이터]", true, "뼈의 초기 트랜스폼입니다")
+    ADD_PROPERTY(FTransform, WorldBindPose, "[캐시]", true, "뼈의 월드 BindPose입니다")
+    ADD_PROPERTY(FMatrix, InverseBindPoseMatrix, "[캐시]", true, "뼈의 Inverse BindPose Matrix입니다")
 END_PROPERTIES()
 
 UBone::UBone(const FName& InName, const FTransform& InitialTransform) :
@@ -169,7 +171,7 @@ const FTransform& UBone::GetWorldBindPose() const
 }
 
 // CPU Skinning 최적화: WorldBindPose와 InverseBindPoseMatrix 캐싱
-const FMatrix& UBone::GetInverseBindPoseMatrix() const
+FMatrix UBone::GetInverseBindPoseMatrix() const
 {
     return InverseBindPoseMatrix;
 }
@@ -244,10 +246,6 @@ const TArray<UBone*>& UBone::GetChildren() const
 void UBone::DuplicateSubObjects()
 {
     Super::DuplicateSubObjects();
-
-    // 얕은 복사로 인해 Parent가 원본 Bone을 가리키므로 nullptr로 초기화
-    // (Root가 아닌 Bone들은 부모에서 SetParent로 재설정될 것임)
-    //Parent = nullptr;
 
     // Children 복제 및 Parent 재설정
     for (int32 i = 0; i < Children.Num(); i++)
