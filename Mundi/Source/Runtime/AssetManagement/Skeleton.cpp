@@ -37,3 +37,14 @@ void USkeleton::SetRoot(UBone* InRoot)
 {
     Root = InRoot;
 }
+
+void USkeleton::CacheAllWorldBindPoses()
+{
+    ForEachBone([](UBone* Bone)
+    {
+        if (Bone)
+        {
+            Bone->CacheWorldBindPose();
+        }
+    });
+}

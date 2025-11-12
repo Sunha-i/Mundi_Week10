@@ -219,6 +219,35 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
         TransformedVertices.resize(VertexCount);
     }
 
+    // 2. Bone Skinning Matrix 배열 캐싱 (프레임당 한 번만 계산!)
+    // ========================================================================
+    // 최적화 핵심: 각 본의 스키닝 행렬을 미리 계산해서 캐시
+    // - 이전: 매 정점마다 본 행렬 계산 (5000정점 × 4본 = 20000번)
+    // - 최적화: 프레임당 한 번만 계산 (50본 = 50번)
+    // ========================================================================
+
+    // 2.1 Bone 포인터 → 인덱스 매핑 생성
+    TMap<UBone*, int32> BoneToIndexMap;
+    TArray<FMatrix> BoneMatrices;
+
+    int32 BoneIndex = 0;
+    SkeletalMeshAsset->Skeleton->ForEachBone([&](UBone* Bone)
+    {
+        if (Bone)
+        {
+            // Bone 포인터를 인덱스로 매핑
+            BoneToIndexMap.Add(Bone, BoneIndex);
+
+            // 스키닝 행렬 계산 및 캐시
+            const FMatrix& InverseBindPoseMatrix = Bone->GetInverseBindPoseMatrix();
+            FMatrix CurrentWorldMatrix = Bone->GetWorldTransform().ToMatrix();
+            FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
+
+            BoneMatrices.Add(SkinningMatrix);
+            BoneIndex++;
+        }
+    });
+
     // 3. 각 정점마다 CPU Skinning 수행
     for (int i = 0; i < VertexCount; i++)
     {
@@ -256,16 +285,12 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             if (!Bone)
                 continue;
 
-            // 올바른 Skinning Matrix 계산 (Row-vector convention)
-            // v' = v × InverseBindPoseMatrix × CurrentWorldMatrix
-            FTransform WorldTransform = Bone->GetWorldTransform();
-            FTransform WorldBindPose = Bone->GetWorldBindPose();
+            // 캐시된 Skinning Matrix 가져오기 (매번 계산 안 함!)
+            int32* BoneIndexPtr = BoneToIndexMap.Find(Bone);
+            if (!BoneIndexPtr || *BoneIndexPtr >= BoneMatrices.Num())
+                continue;
 
-            FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
-            FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
-
-            // Row-vector: 먼저 InvBindPose, 그 다음 CurrentWorld
-            FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
+            const FMatrix& SkinningMatrix = BoneMatrices[*BoneIndexPtr];
 
             // Position 변환
             FVector TransformedPos = SrcVertex.Position * SkinningMatrix;

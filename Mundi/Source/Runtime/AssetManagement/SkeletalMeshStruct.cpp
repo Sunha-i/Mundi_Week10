@@ -8,6 +8,9 @@ FSkeletalMesh::FSkeletalMesh(const FSkeletalMesh& Other) : FMesh(static_cast<con
     if (Other.Skeleton)
     {
         Skeleton = Other.Skeleton->Duplicate();
+
+        // CPU Skinning 최적화: 복사된 Skeleton의 WorldBindPose와 InverseBindPoseMatrix 캐싱
+        Skeleton->CacheAllWorldBindPoses();
     }
 
     // 2. Flesh 배열 복사 (이제 FGroupInfo만 가지므로 간단히 복사)
