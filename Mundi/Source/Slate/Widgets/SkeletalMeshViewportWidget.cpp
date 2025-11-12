@@ -21,9 +21,8 @@ IMPLEMENT_CLASS(USkeletalMeshViewportWidget)
 USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 {
 	WorldForPreviewManager.CreateWorldForPreviewScene();
-	WorldForPreviewManager.SetDirectionalLight(
-		{ 0.f, 0.f, 180.f }, {0.f,0.f,-90.f}
-	);
+	WorldForPreviewManager.SetDirectionalLight({ 0.f, 0.f, 180.f }, { 0.f,0.f,-90.f });
+	WorldForPreviewManager.SetGizmo();
 
 	// ViewportClient 생성 (내부적으로 Camera 생성)
 	Viewport.SetViewportClient(new FViewportClient());
@@ -207,7 +206,7 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 {
 	if (!Bone) return;
 
-	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_DefaultOpen;
 
 	// 선택된 Bone이면 하이라이트
 	if (Bone == SelectedBone)

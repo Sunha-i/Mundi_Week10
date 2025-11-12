@@ -46,11 +46,23 @@ void FPreviewScene::SetDirectionalLight(const FVector& LightRotation, const FVec
     if (!WorldForPreview)
         UE_LOG("[FPreviewScene::SetDirectionalLight] Warning : WorldForPreview is null.");
 
-    ADirectionalLightActor* LightActor =
-        NewObject<ADirectionalLightActor>();
-    LightActor->SetActorRotation(LightRotation);
-    LightActor->SetActorLocation(LightLocation);
-    SetActor(LightActor);
+    if (!DirectionalLight)
+    {
+        DirectionalLight = NewObject<ADirectionalLightActor>();
+        SetActor(DirectionalLight);
+    }
+    DirectionalLight->SetActorRotation(LightRotation);
+    DirectionalLight->SetActorLocation(LightLocation);
+}
+
+void FPreviewScene::SetGizmo()
+{
+    if (!WorldForPreview) return;
+    if (!Gizmo)
+    {
+        Gizmo = NewObject<AGizmoActor>();
+        SetActor(Gizmo);
+    }
 }
 
 UWorld* FPreviewScene::GetWorldForPreview() const
