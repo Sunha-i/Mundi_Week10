@@ -138,7 +138,7 @@ void ASkeletalMeshActor::BuildSkeletonOverlay(UBone* SelectedBone)
     if (!SkeletonOverlay)
         return;
 
-    SkeletonOverlay->ClearLines();
+    SkeletonOverlay->ClearLines();  // This marks cache as dirty automatically
 
     const FTransform ComponentInverse = SkeletalMeshComponent->GetWorldTransform().Inverse();
     BuildSkeletonLinesRecursive(Skeleton->GetRoot(), ComponentInverse, SkeletonOverlay, SelectedBone);
@@ -200,7 +200,7 @@ void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, cons
         return;
 
     const float Radius = 0.015f;
-    const int32 Segments = 16;
+    const int32 Segments = 8;  // Reduced from 16 to 8 for performance (50% fewer lines)
     const float DeltaAngle = 2.0f * 3.1415926535f / Segments;
 
     // 기본 축 3개 (회전 적용 전)

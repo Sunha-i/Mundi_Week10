@@ -36,13 +36,25 @@ public:
     void GetWorldLineData(TArray<FVector>& OutStartPoints, TArray<FVector>& OutEndPoints, TArray<FVector4>& OutColors) const;
     bool HasVisibleLines() const { return bLinesVisible && !Lines.empty(); }
 
+    // Cache invalidation
+    void MarkWorldDataDirty() { bWorldDataDirty = true; }
+
     // ───── 복사 관련 ────────────────────────────
     void DuplicateSubObjects() override;
     DECLARE_DUPLICATE(ULineComponent)
+
+protected:
+    void OnTransformUpdated() override;
 
 private:
     TArray<ULine*> Lines;
     bool bLinesVisible = true;
     bool bRequiresGridShowFlag = true;
     bool bAlwaysOnTop = false;
+
+    // World coordinate cache for performance
+    mutable TArray<FVector> CachedStartPoints;
+    mutable TArray<FVector> CachedEndPoints;
+    mutable TArray<FVector4> CachedColors;
+    mutable bool bWorldDataDirty = true;
  };
