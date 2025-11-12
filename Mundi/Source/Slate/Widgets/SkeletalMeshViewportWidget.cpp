@@ -290,11 +290,39 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 			// ImGui에 PreviewSRV 표시 (동적 크기)
 			ImGui::Image((void*)PreviewSRV, ImVec2(newWidth, newHeight));
 
+			bool bIsViewportHovered = ImGui::IsItemHovered();
+			
+			// +-+-+ Joint/Bone Picking +-+-+
+			if (bIsViewportHovered && ImGui::IsMouseClicked(0))
+			{
+				// Bone picking only when gizmo is not hovered
+				if (HoveredGizmoAxis == 0 && !bIsGizmoDragging)
+				{
+					ImVec2 Min = ImGui::GetItemRectMin();
+					ImVec2 MouseAbs = ImGui::GetMousePos();
+					FVector2D ViewportMousePos(MouseAbs.x - Min.x, MouseAbs.y - Min.y);
+					FVector2D ViewportSize(newWidth, newHeight);
+
+					UBone* PickedBone = PickBoneFromViewport(ViewportMousePos, ViewportSize);
+					if (PickedBone)
+					{
+						SelectedBone = PickedBone;
+						MarkSkeletonOverlayDirty();
+						UpdateGizmoTransform();
+					}
+					else  // Deselect on clicking empty space
+					{
+					    SelectedBone = nullptr;
+						MarkSkeletonOverlayDirty();
+					    UpdateGizmoVisibility();
+					}
+				}
+			}
+
 			// +-+-+ Gizmo Interaction Logic +-+-+
 			if (SelectedBone)
 			{
 				AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
-				bool bIsViewportHovered = ImGui::IsItemHovered();
 
 				// 1. Hovering (Picking)
 				if (bIsViewportHovered && !bIsGizmoDragging)
@@ -310,7 +338,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 						FVector2D(0, 0), &Viewport, DragImpactPoint
 					);
 
-					UE_LOG("Hovered Axis: %d", HoveredGizmoAxis);
 					UpdateGizmoVisibility();
 				}
 
@@ -711,6 +738,85 @@ void USkeletalMeshViewportWidget::UpdateGizmoTransform()
 	
 	Gizmo->SetActorLocation(BoneWorldTransform.Translation);
 	Gizmo->SetActorRotation(BoneWorldTransform.Rotation);
+}
+
+UBone* USkeletalMeshViewportWidget::PickBoneFromViewport(const FVector2D& ViewportMousePos, const FVector2D& ViewportSize)
+{
+	if (!PreviewActor || !PreviewCamera) return nullptr;
+
+	USkeletalMeshComponent* MeshComp = PreviewActor->GetSkeletalMeshComponent();
+	if (!MeshComp || !MeshComp->GetSkeletalMesh()) return nullptr;
+
+	FSkeletalMesh* SkeletalMesh = MeshComp->GetSkeletalMesh()->GetSkeletalMeshAsset();
+	USkeleton* Skeleton = SkeletalMesh->Skeleton;
+	if (!Skeleton || !Skeleton->GetRoot()) return nullptr;
+
+	// Create ray
+	const FMatrix View = PreviewCamera->GetViewMatrix();
+	const FMatrix Proj = PreviewCamera->GetProjectionMatrix(Viewport.GetAspectRatio(), &Viewport);
+	const FVector CameraWorldPos = PreviewCamera->GetActorLocation();
+	const FVector CameraRight = PreviewCamera->GetRight();
+	const FVector CameraUp = PreviewCamera->GetUp();
+	const FVector CameraForward = PreviewCamera->GetForward();
+
+	FRay Ray = MakeRayFromViewport(View, Proj, CameraWorldPos, CameraRight, CameraUp, CameraForward,
+		ViewportMousePos, ViewportSize, FVector2D(0, 0));
+
+	// Collect all bones
+	TArray<UBone*> AllBones;
+	CollectAllBones(Skeleton->GetRoot(), AllBones);
+
+	UBone* ClosestBone = nullptr;
+	float ClosestDistance = 1e9f;
+
+	const float JointRadius = GetJointPickRadius();
+	const float LineThreshold = GetBoneLinePickThreshold();
+
+	for (UBone* Bone : AllBones)
+	{
+		FVector BoneWorldPos = Bone->GetWorldTransform().Translation;
+
+		// 1. Joint Picking: Sphere intersection check
+		float HitDistance;
+		if (IntersectRaySphere(Ray, BoneWorldPos, JointRadius, HitDistance))
+		{
+			if (HitDistance < ClosestDistance)
+			{
+				ClosestDistance = HitDistance;
+				ClosestBone = Bone;
+			}
+		}
+
+		// 2. Bone Picking: Line segment check to child bone
+		const TArray<UBone*>& Children = Bone->GetChildren();
+		for (UBone* Child : Children)
+		{
+			FVector ChildWorldPos = Child->GetWorldTransform().Translation;
+
+			float rayT, segmentT;
+			float distance = DistanceRayToLineSegment(Ray, BoneWorldPos, ChildWorldPos, rayT, segmentT);
+
+			// If close to the line, select the parent bone
+			if (distance < LineThreshold && rayT < ClosestDistance)
+			{
+				ClosestDistance = rayT;	// Use rayT for depth comparison
+				ClosestBone = Bone;		// Select the parent bone of the line
+			}
+		}
+	}
+
+	return ClosestBone;
+}
+
+void USkeletalMeshViewportWidget::CollectAllBones(UBone* Bone, TArray<UBone*>& OutBones)
+{
+	if (!Bone) return;
+	OutBones.Add(Bone);
+
+	for (UBone* Child : Bone->GetChildren())
+	{
+		CollectAllBones(Child, OutBones);
+	}
 }
 
 bool USkeletalMeshViewportWidget::HasLoadedSkeletalMesh() const

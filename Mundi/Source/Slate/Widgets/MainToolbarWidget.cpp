@@ -46,7 +46,7 @@ void UMainToolbarWidget::LoadToolbarIcons()
     IconStop = UResourceManager::GetInstance().Load<UTexture>("Data/Icon/Toolbar_Stop.png");
     IconAddActor = UResourceManager::GetInstance().Load<UTexture>("Data/Icon/Toolbar_AddActor.png");
     IconPrefab = UResourceManager::GetInstance().Load<UTexture>("Data/Icon/Toolbar_Prefab.png");
-    LogoTexture = UResourceManager::GetInstance().Load<UTexture>("Data/Icon/Mundi_Logo.png");
+    //LogoTexture = UResourceManager::GetInstance().Load<UTexture>("Data/Icon/Mundi_Logo.png");
 }
 
 void UMainToolbarWidget::RenderToolbar()
