@@ -215,7 +215,7 @@ FMatrix UBone::GetSkinningMatrix()
     FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
     FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
 
-    return CurrentWorldMatrix * InverseBindPoseMatrix;
+    return InverseBindPoseMatrix * CurrentWorldMatrix;
 }
 
 void UBone::AddChild(UBone* InChild)
