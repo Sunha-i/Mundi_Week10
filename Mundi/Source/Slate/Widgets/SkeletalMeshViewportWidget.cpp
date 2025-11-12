@@ -115,6 +115,7 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	PreviewWorld->AddEditorActor(SkeletalMeshActor);
 	PreviewActor = SkeletalMeshActor;
 	MarkSkeletonOverlayDirty();
+	UpdateGizmoVisibility();
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -223,6 +224,7 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 	{
 		SelectedBone = Bone;
 		MarkSkeletonOverlayDirty(); // 선택 변경 시 스켈레톤 오버레이 다시 그리기
+		UpdateGizmoTransform();
 	}
 
 	// 자식이 있으면 재귀적으로 렌더링
@@ -244,6 +246,15 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		ImGui::Separator();
 		ImGui::Text("Mesh: %s", TargetMeshName.ToString().c_str());
 		ImGui::Separator();
+
+		// Switch mode via space input
+		if (ImGui::IsKeyPressed(ImGuiKey_Space))
+		{
+			int GizmoModeIndex = static_cast<int>(CurrentGizmoMode);
+			GizmoModeIndex = (GizmoModeIndex + 1) % static_cast<int>(EGizmoMode::Select);
+			CurrentGizmoMode = static_cast<EGizmoMode>(GizmoModeIndex);
+			UpdateGizmoVisibility();
+		}
 
 		const bool bHasMeshLoaded = HasLoadedSkeletalMesh();
 		ImGui::BeginDisabled(!bHasMeshLoaded);
@@ -548,6 +559,26 @@ void USkeletalMeshViewportWidget::ReleasePreviewRenderTarget()
 
 	PreviewTextureWidth = 0;
 	PreviewTextureHeight = 0;
+}
+
+void USkeletalMeshViewportWidget::UpdateGizmoVisibility()
+{
+	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+	if (!Gizmo)    return;
+
+	Gizmo->ApplyGizmoVisualState(true, CurrentGizmoMode, HoveredGizmoAxis);
+}
+
+void USkeletalMeshViewportWidget::UpdateGizmoTransform()
+{
+	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+	if (!Gizmo)    return;
+
+	if (!SelectedBone)	return;
+	const FTransform BoneWorldTransform = SelectedBone->GetWorldTransform();
+	
+	Gizmo->SetActorLocation(BoneWorldTransform.Translation);
+	Gizmo->SetActorRotation(BoneWorldTransform.Rotation);
 }
 
 bool USkeletalMeshViewportWidget::HasLoadedSkeletalMesh() const

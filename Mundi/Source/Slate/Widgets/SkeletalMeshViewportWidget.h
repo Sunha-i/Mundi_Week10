@@ -39,6 +39,10 @@ private:
 	// Preview RenderTarget 관리
 	bool CreatePreviewRenderTarget(uint32 Width, uint32 Height);
 	void ReleasePreviewRenderTarget();
+	
+	// About Gizmo
+	void UpdateGizmoVisibility();
+	void UpdateGizmoTransform();
 
 public:
 	FName TargetMeshName{};
@@ -63,6 +67,13 @@ private:
 	uint32 PreviewTextureWidth = 0;
 	uint32 PreviewTextureHeight = 0;
 
-	// 선택된 Bone
+	// SelectedInfo
 	class UBone* SelectedBone = nullptr;
+	EGizmoMode CurrentGizmoMode = EGizmoMode::Translate;
+
+	// GizmoInteractionStatus
+	uint32 HoveredGizmoAxis = 0;
+
+	// DragStartStatusInfo
+	FVector DragImpactPoint;
 };

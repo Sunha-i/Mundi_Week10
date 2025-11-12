@@ -613,6 +613,27 @@ void AGizmoActor::ProcessGizmoModeSwitch()
 	}
 }
 
+void AGizmoActor::ApplyGizmoVisualState(bool bInHasSelection, EGizmoMode InCurrentMode, uint32 InHighlightAxis)
+{
+	// Arrow Components (Translate Mode)
+	bool bShowArrows = bInHasSelection && (InCurrentMode == EGizmoMode::Translate);
+	if (ArrowX) { ArrowX->SetActive(bShowArrows); ArrowX->SetHighlighted(InHighlightAxis == 1, 1); }
+	if (ArrowY) { ArrowY->SetActive(bShowArrows); ArrowY->SetHighlighted(InHighlightAxis == 2, 2); }
+	if (ArrowZ) { ArrowZ->SetActive(bShowArrows); ArrowZ->SetHighlighted(InHighlightAxis == 3, 3); }
+
+	// Rotate Components (Rotate Mode)
+	bool bShowRotates = bInHasSelection && (InCurrentMode == EGizmoMode::Rotate);
+	if (RotateX) { RotateX->SetActive(bShowRotates); RotateX->SetHighlighted(InHighlightAxis == 1, 1); }
+	if (RotateY) { RotateY->SetActive(bShowRotates); RotateY->SetHighlighted(InHighlightAxis == 2, 2); }
+	if (RotateZ) { RotateZ->SetActive(bShowRotates); RotateZ->SetHighlighted(InHighlightAxis == 3, 3); }
+
+	// Scale Components (Scale Mode)
+	bool bShowScales = bInHasSelection && (InCurrentMode == EGizmoMode::Scale);
+	if (ScaleX) { ScaleX->SetActive(bShowScales); ScaleX->SetHighlighted(InHighlightAxis == 1, 1); }
+	if (ScaleY) { ScaleY->SetActive(bShowScales); ScaleY->SetHighlighted(InHighlightAxis == 2, 2); }
+	if (ScaleZ) { ScaleZ->SetActive(bShowScales); ScaleZ->SetHighlighted(InHighlightAxis == 3, 3); }
+}
+
 void AGizmoActor::UpdateComponentVisibility()
 {
 	// 선택된 액터가 없으면 모든 기즈모 컴포넌트를 비활성화
@@ -621,23 +642,7 @@ void AGizmoActor::UpdateComponentVisibility()
 	// 드래그 중일 때는 고정된 축(DraggingAxis)을, 아닐 때는 호버 축(GizmoAxis)을 사용
 	uint32 HighlightAxis = bIsDragging ? DraggingAxis : GizmoAxis;
 
-	// Arrow Components (Translate 모드)
-	bool bShowArrows = bHasSelection && (CurrentMode == EGizmoMode::Translate);
-	if (ArrowX) { ArrowX->SetActive(bShowArrows); ArrowX->SetHighlighted(HighlightAxis == 1, 1); }
-	if (ArrowY) { ArrowY->SetActive(bShowArrows); ArrowY->SetHighlighted(HighlightAxis == 2, 2); }
-	if (ArrowZ) { ArrowZ->SetActive(bShowArrows); ArrowZ->SetHighlighted(HighlightAxis == 3, 3); }
-
-	// Rotate Components (Rotate 모드)
-	bool bShowRotates = bHasSelection && (CurrentMode == EGizmoMode::Rotate);
-	if (RotateX) { RotateX->SetActive(bShowRotates); RotateX->SetHighlighted(HighlightAxis == 1, 1); }
-	if (RotateY) { RotateY->SetActive(bShowRotates); RotateY->SetHighlighted(HighlightAxis == 2, 2); }
-	if (RotateZ) { RotateZ->SetActive(bShowRotates); RotateZ->SetHighlighted(HighlightAxis == 3, 3); }
-
-	// Scale Components (Scale 모드)
-	bool bShowScales = bHasSelection && (CurrentMode == EGizmoMode::Scale);
-	if (ScaleX) { ScaleX->SetActive(bShowScales); ScaleX->SetHighlighted(HighlightAxis == 1, 1); }
-	if (ScaleY) { ScaleY->SetActive(bShowScales); ScaleY->SetHighlighted(HighlightAxis == 2, 2); }
-	if (ScaleZ) { ScaleZ->SetActive(bShowScales); ScaleZ->SetHighlighted(HighlightAxis == 3, 3); }
+	ApplyGizmoVisualState(bHasSelection, CurrentMode, HighlightAxis);
 }
 
 void AGizmoActor::OnDrag(USceneComponent* SelectedComponent, uint32 GizmoAxis, float MouseDeltaX, float MouseDeltaY, const ACameraActor* Camera)
