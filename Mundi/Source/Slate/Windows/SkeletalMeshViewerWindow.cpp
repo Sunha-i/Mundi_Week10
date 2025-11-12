@@ -15,7 +15,6 @@ void USkeletalMeshViewerWindow::Initialize()
 	FUIWindowConfig Config = InitConfig;
 	if (!TargetMeshName.Empty())
 	{
-		Config.WindowTitle = "Skeletal Mesh Viewer: " + TargetMeshName.ToString();
 		// ImGui는 ##뒤의 ID로 윈도우를 구분하므로, 고유한 ID 추가
 		Config.WindowTitle = "Skeletal Mesh Viewer: " + TargetMeshName.ToString() + "##" + std::to_string(GetWindowID());
 	}
