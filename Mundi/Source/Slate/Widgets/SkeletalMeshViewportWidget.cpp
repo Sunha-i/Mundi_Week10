@@ -224,6 +224,7 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 	if (ImGui::IsItemClicked())
 	{
 		SelectedBone = Bone;
+		MarkSkeletonOverlayDirty(); // 선택 변경 시 스켈레톤 오버레이 다시 그리기
 	}
 
 	// 자식이 있으면 재귀적으로 렌더링
@@ -556,8 +557,8 @@ void USkeletalMeshViewportWidget::UpdateSkeletonOverlayIfNeeded()
 		return;
 	}
 
-	// Delegate skeleton building to the actor
-	SkeletalActor->BuildSkeletonOverlay();
+	// Delegate skeleton building to the actor (선택된 본 정보 전달)
+	SkeletalActor->BuildSkeletonOverlay(SelectedBone);
 	bSkeletonLinesDirty = false;
 }
 

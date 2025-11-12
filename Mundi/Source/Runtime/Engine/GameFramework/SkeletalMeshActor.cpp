@@ -124,7 +124,7 @@ void ASkeletalMeshActor::ClearSkeletonOverlay(bool bDestroyComponent)
     }
 }
 
-void ASkeletalMeshActor::BuildSkeletonOverlay()
+void ASkeletalMeshActor::BuildSkeletonOverlay(UBone* SelectedBone)
 {
     if (!SkeletalMeshComponent)
         return;
@@ -141,11 +141,11 @@ void ASkeletalMeshActor::BuildSkeletonOverlay()
     SkeletonOverlay->ClearLines();
 
     const FTransform ComponentInverse = SkeletalMeshComponent->GetWorldTransform().Inverse();
-    BuildSkeletonLinesRecursive(Skeleton->GetRoot(), ComponentInverse, SkeletonOverlay);
+    BuildSkeletonLinesRecursive(Skeleton->GetRoot(), ComponentInverse, SkeletonOverlay, SelectedBone);
     SkeletonOverlay->SetLineVisible(true);
 }
 
-void ASkeletalMeshActor::BuildSkeletonLinesRecursive(UBone* Bone, const FTransform& ComponentWorldInverse, ULineComponent* SkeletonLineComponent)
+void ASkeletalMeshActor::BuildSkeletonLinesRecursive(UBone* Bone, const FTransform& ComponentWorldInverse, ULineComponent* SkeletonLineComponent, UBone* SelectedBone)
 {
     if (!Bone || !SkeletonLineComponent)
         return;
@@ -157,8 +157,12 @@ void ASkeletalMeshActor::BuildSkeletonLinesRecursive(UBone* Bone, const FTransfo
     const FVector ParentLocal = ComponentWorldInverse.TransformPosition(BoneWorld.Translation);
     const FQuat RotationLocal = ComponentWorldInverse.Rotation.Inverse() * BoneWorld.Rotation;
 
+    // 색상 결정: 선택된 본이면 초록색, 아니면 흰색
+    const bool bIsSelected = (Bone == SelectedBone);
+    const FVector4 JointColor = bIsSelected ? FVector4(0.2f, 1.0f, 0.2f, 1.0f) : FVector4(1.f, 1.f, 1.f, 1.f);
+
     // 관절 구체 추가
-    AddJointSphereOriented(ParentLocal, RotationLocal, SkeletonLineComponent);
+    AddJointSphereOriented(ParentLocal, RotationLocal, SkeletonLineComponent, JointColor);
 
     // 자식 본 처리
     for (UBone* Child : Bone->GetChildren())
@@ -169,15 +173,28 @@ void ASkeletalMeshActor::BuildSkeletonLinesRecursive(UBone* Bone, const FTransfo
         // 자식 본의 로컬 위치 계산
         const FVector ChildLocal = ComponentWorldInverse.TransformPosition(Child->GetWorldLocation());
 
+        // 피라미드 색상 결정: 선택된 본에서 자식으로 가는 라인이면 초록색, 부모에서 선택된 본으로 들어오면 주황색
+        FVector4 PyramidColor = FVector4(1.f, 1.f, 1.f, 1.f); // 기본 흰색
+        if (bIsSelected)
+        {
+            // 선택된 본에서 자식으로 가는 피라미드는 초록색
+            PyramidColor = FVector4(0.2f, 1.0f, 0.2f, 1.0f);
+        }
+        else if (Child == SelectedBone)
+        {
+            // 부모 본에서 선택된 본으로 들어오는 피라미드는 주황색
+            PyramidColor = FVector4(1.0f, 0.5f, 0.0f, 1.0f);
+        }
+
         // 부모→자식 방향으로 본 피라미드 생성
-        AddBonePyramid(ParentLocal, ChildLocal, SkeletonLineComponent);
+        AddBonePyramid(ParentLocal, ChildLocal, SkeletonLineComponent, PyramidColor);
 
         // 재귀 호출 (자식 뼈대도 처리)
-        BuildSkeletonLinesRecursive(Child, ComponentWorldInverse, SkeletonLineComponent);
+        BuildSkeletonLinesRecursive(Child, ComponentWorldInverse, SkeletonLineComponent, SelectedBone);
     }
 }
 
-void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, const FQuat& RotationLocal, ULineComponent* SkeletonLineComponent)
+void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, const FQuat& RotationLocal, ULineComponent* SkeletonLineComponent, const FVector4& Color)
 {
     if (!SkeletonLineComponent)
         return;
@@ -192,8 +209,6 @@ void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, cons
         FVector(0.f, 1.f, 0.f),
         FVector(0.f, 0.f, 1.f)
     };
-
-    const FVector4 Color = FVector4(1.f, 1.f, 1.f, 1.f);
 
     for (int AxisIdx = 0; AxisIdx < 3; ++AxisIdx)
     {
@@ -215,7 +230,7 @@ void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, cons
     }
 }
 
-void ASkeletalMeshActor::AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* SkeletonLineComponent)
+void ASkeletalMeshActor::AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* SkeletonLineComponent, const FVector4& Color)
 {
     if (!SkeletonLineComponent)
         return;
@@ -237,8 +252,8 @@ void ASkeletalMeshActor::AddBonePyramid(const FVector& ParentLocal, const FVecto
     FVector Right = FVector::Cross(Up, Forward).GetSafeNormal();
     FVector TrueUp = FVector::Cross(Forward, Right).GetSafeNormal();
 
-    // 피라미드 밑면 크기
-    float BaseRadius = Length * 0.05f;
+    // 피라미드 밑면 크기 (비례하되 최대값 제한)
+    float BaseRadius = std::min(Length * 0.05f, 0.01f);
 
     // 부모 관절 기준 밑면 세 점 (삼각형)
     FVector BaseA = ParentLocal + (Right * BaseRadius) + (TrueUp * BaseRadius);
@@ -248,15 +263,13 @@ void ASkeletalMeshActor::AddBonePyramid(const FVector& ParentLocal, const FVecto
     // 자식 관절이 피라미드의 Apex
     FVector Apex = ChildLocal;
 
-    const FVector4 BoneColor = FVector4(1.f, 1.f, 1.f, 1.f);
-
     // 밑면 삼각형 윤곽선
-    SkeletonLineComponent->AddLine(BaseA, BaseB, BoneColor);
-    SkeletonLineComponent->AddLine(BaseB, BaseC, BoneColor);
-    SkeletonLineComponent->AddLine(BaseC, BaseA, BoneColor);
+    SkeletonLineComponent->AddLine(BaseA, BaseB, Color);
+    SkeletonLineComponent->AddLine(BaseB, BaseC, Color);
+    SkeletonLineComponent->AddLine(BaseC, BaseA, Color);
 
     // 각 밑면 점과 꼭짓점 연결
-    SkeletonLineComponent->AddLine(BaseA, Apex, BoneColor);
-    SkeletonLineComponent->AddLine(BaseB, Apex, BoneColor);
-    SkeletonLineComponent->AddLine(BaseC, Apex, BoneColor);
+    SkeletonLineComponent->AddLine(BaseA, Apex, Color);
+    SkeletonLineComponent->AddLine(BaseB, Apex, Color);
+    SkeletonLineComponent->AddLine(BaseC, Apex, Color);
 }

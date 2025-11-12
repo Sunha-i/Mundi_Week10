@@ -31,11 +31,11 @@ public:
     ULineComponent* GetSkeletonOverlay() const { return SkeletonOverlay; }
     ULineComponent* EnsureSkeletonOverlay(UWorld* World);
     void ClearSkeletonOverlay(bool bDestroyComponent);
-    void BuildSkeletonOverlay();
+    void BuildSkeletonOverlay(class UBone* SelectedBone = nullptr);
 private:
-    void BuildSkeletonLinesRecursive(class UBone* Bone, const FTransform& ComponentWorldInverse, ULineComponent* Line);
-    void AddJointSphereOriented(const FVector& CenterLocal, const FQuat& RotationLocal, ULineComponent* Line);
-    void AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* Line);
+    void BuildSkeletonLinesRecursive(class UBone* Bone, const FTransform& ComponentWorldInverse, ULineComponent* Line, class UBone* SelectedBone);
+    void AddJointSphereOriented(const FVector& CenterLocal, const FQuat& RotationLocal, ULineComponent* Line, const FVector4& Color);
+    void AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* Line, const FVector4& Color);
 
 protected:
     USkeletalMeshComponent* SkeletalMeshComponent;
