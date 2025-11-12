@@ -90,4 +90,8 @@ private:
 	FVector2D DragStartMousePosition;
 	FVector DragImpactPoint;
 	FVector2D DragScreenVector;
+
+	// Performance optimization: throttle skeleton overlay updates during drag
+	int OverlayUpdateFrameCounter = 0;
+	const int OVERLAY_UPDATE_INTERVAL = 5;  // Update every 5 frames during drag
 };

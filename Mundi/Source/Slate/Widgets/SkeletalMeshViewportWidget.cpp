@@ -417,10 +417,16 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 					FTransform NewRelativeTransform = ParentWorldTransform.GetRelativeTransform(NewWorldTransform);
 					SelectedBone->SetRelativeTransform(NewRelativeTransform);
 
-					// Update
+					// Update gizmo transform immediately for responsiveness
 					UpdateGizmoTransform();
-					MarkSkeletonOverlayDirty();
-					SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
+
+					// Throttle expensive operations: only update every N frames for real-time feedback
+					if (++OverlayUpdateFrameCounter >= OVERLAY_UPDATE_INTERVAL)
+					{
+						MarkSkeletonOverlayDirty();
+						SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
+						OverlayUpdateFrameCounter = 0;
+					}
 				}
 
 				if (ImGui::IsMouseReleased(0))
@@ -428,6 +434,15 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 					bIsGizmoDragging = false;
 					DraggingGizmoAxis = 0;
 					UpdateGizmoVisibility();
+
+					// Final update when drag ends to ensure everything is in sync
+					MarkSkeletonOverlayDirty();
+					OverlayUpdateFrameCounter = 0;  // Reset counter for next drag
+					ASkeletalMeshActor* SkelActor = GetPreviewActor();
+					if (SkelActor)
+					{
+						SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
+					}
 				}
 			}
 
@@ -672,9 +687,28 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		if (bLocationChanged || bRotationChanged || bScaleChanged)
 		{
 			FTransform NewTransform(RelLoc, RelQuat, RelScale);
-			SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 			SelectedBone->SetRelativeTransform(NewTransform);
-			MarkSkeletonOverlayDirty();
+
+			// Check if any ImGui widget is currently being actively dragged
+			bool bIsAnyWidgetActive = ImGui::IsAnyItemActive();
+
+			if (bIsAnyWidgetActive)
+			{
+				// Throttle expensive operations during slider drag for real-time feedback
+				if (++OverlayUpdateFrameCounter >= OVERLAY_UPDATE_INTERVAL)
+				{
+					SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
+					MarkSkeletonOverlayDirty();
+					OverlayUpdateFrameCounter = 0;
+				}
+			}
+			else
+			{
+				// Final update when drag ends
+				SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
+				MarkSkeletonOverlayDirty();
+				OverlayUpdateFrameCounter = 0;
+			}
 		}
 
 		ImGui::Unindent();
