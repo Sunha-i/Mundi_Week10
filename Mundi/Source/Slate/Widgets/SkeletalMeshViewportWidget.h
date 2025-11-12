@@ -53,6 +53,9 @@ private:
     bool bSkeletonLinesDirty = false;
 
     ASkeletalMeshActor* PreviewActor = nullptr;
+	// PreviewScene의 카메라
+	ACameraActor* PreviewCamera;
+	bool bIsDraggingViewport;	// store dragging status
 
 	// Preview용 독립 RenderTarget
 	ID3D11Texture2D* PreviewTexture = nullptr;

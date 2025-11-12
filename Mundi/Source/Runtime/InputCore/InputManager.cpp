@@ -245,6 +245,11 @@ void UInputManager::ProcessMessage(HWND hWnd, UINT message, WPARAM wParam, LPARA
         break;
 
     case WM_MOUSEWHEEL:
+        if (ImGui::GetCurrentContext() != nullptr)
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            io.MouseWheel += static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
+        }
         if (!IsUIHover)
         {
             // 휠 델타값 추출 (HIWORD에서 signed short로 캐스팅)

@@ -32,17 +32,16 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 	);
 
 	// ViewportClient의 Camera를 PreviewScene에 등록
-	ACameraActor* Camera = Viewport.GetViewportClient()->GetCamera();
-	if (Camera)
+	PreviewCamera = Viewport.GetViewportClient()->GetCamera();
+	if (PreviewCamera)
 	{
-		Camera->SetActorLocation({1.7f, 0.f, 0.7f});
-		Camera->SetRotationFromEulerAngles({0.f, 0.f, 180.f});
-		WorldForPreviewManager.SetCamera(Camera);
+		PreviewCamera->SetActorLocation({1.7f, 0.f, 0.7f});
+		PreviewCamera->SetRotationFromEulerAngles({0.f, 0.f, 180.f});
+		WorldForPreviewManager.SetCamera(PreviewCamera);
 	}
+	bIsDraggingViewport = false;
 
-	Viewport.Resize(
-		0,
-		0,
+	Viewport.Resize(0, 0,
 		DEFAULT_VIEWPORT_WIDTH,
 		DEFAULT_VIEWPORT_HEIGHT
 	);
@@ -273,11 +272,23 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		// ImGui::Text("- PreviewSRV: %s", PreviewSRV ? "OK" : "NULL");
 		// ImGui::Text("- PreviewTexture: %s", PreviewTexture ? "OK" : "NULL");
 
-		FViewportClient* ViewportClient = Viewport.GetViewportClient();
-		ID3D11Texture2D* RenderedTexture = nullptr;
+		// +-+-+ Dynamic Resizing +-+-+
+		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+		float newWidth = viewportPanelSize.x;
+		float newHeight = viewportPanelSize.y;
 
+		// 크기가 변경된 경우, 렌더 타겟 재생성
+		if (newWidth > 0 && newHeight > 0 && (PreviewTextureWidth != static_cast<uint32>(newWidth) || PreviewTextureHeight != static_cast<uint32>(newHeight)))
+		{
+			ReleasePreviewRenderTarget();
+			CreatePreviewRenderTarget(static_cast<uint32>(newWidth), static_cast<uint32>(newHeight));
+			Viewport.Resize(0, 0, static_cast<uint32>(newWidth), static_cast<uint32>(newHeight));
+		}
+
+		FViewportClient* ViewportClient = Viewport.GetViewportClient();
 		// ImGui::Text("- ViewportClient: %s", ViewportClient ? "OK" : "NULL");
 
+		ID3D11Texture2D* RenderedTexture = nullptr;
 		RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
 
 		D3D11RHI* RHI = URenderManager::GetInstance().GetRenderer()->GetRHIDevice();
@@ -289,12 +300,66 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		{
 			RHI->CopyTexture(PreviewTexture, RenderedTexture);
 
-			// ImGui에 PreviewSRV 표시 (고정 크기)
-			ImVec2 PreviewImageSize(
-				static_cast<float>(PreviewTextureWidth),
-				static_cast<float>(PreviewTextureHeight)
-			);
-			ImGui::Image((void*)PreviewSRV, PreviewImageSize);
+			// ImGui에 PreviewSRV 표시 (동적 크기)
+			ImGui::Image((void*)PreviewSRV, ImVec2(newWidth, newHeight));
+
+			// 1) 드래그 시작 조건: ImGui::Image 위에서 우클릭을 시작했을 때
+			if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(1))		// 1: MouseRight (Only process RT)
+			{
+				bIsDraggingViewport = true;
+			}
+
+			// 2) 드래그 종료 조건: 마우스 우클릭 버튼을 (어디서든) 뗐을 때
+			if (ImGui::IsMouseReleased(1))
+			{
+				bIsDraggingViewport = false;
+			}
+
+			// 3) 드래그 진행: bIsDraggingViewport가 true일 때만 회전/이동 처리
+			if (bIsDraggingViewport)
+			{
+				// Camera rotation
+				ImVec2 MouseDelta = ImGui::GetIO().MouseDelta;
+				if (MouseDelta.x != 0.0f || MouseDelta.y != 0.0f)
+				{
+					if (PreviewCamera)
+					{
+						PreviewCamera->ApplyRotationInput(FVector2D(MouseDelta.x, MouseDelta.y));
+					}
+				}
+
+				// Camera movement
+				FVector MoveDirection = FVector::Zero();
+				if (ImGui::IsKeyDown(ImGuiKey_W)) MoveDirection.X += 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_S)) MoveDirection.X -= 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_D)) MoveDirection.Y += 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_A)) MoveDirection.Y -= 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_E)) MoveDirection.Z += 1.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_Q)) MoveDirection.Z -= 1.0f;
+				if (!MoveDirection.IsZero())
+				{
+					if (PreviewCamera)
+					{
+						float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+						PreviewCamera->ApplyMovementInput(MoveDirection, DeltaSeconds);
+					}
+				}
+			}
+
+			// 4) 줌 처리: 드래그 상태와 상관없이, ImGui::Image 호버 시에만 처리
+			if (ImGui::IsItemHovered())
+			{
+				// Camera zoom
+				float wheel = ImGui::GetIO().MouseWheel;
+				if (wheel != 0.0f)
+				{
+					if (PreviewCamera)
+					{
+						float DeltaSeconds = GWorld->GetDeltaTime(EDeltaTime::Unscaled);
+						PreviewCamera->ApplyZoomInput(wheel, DeltaSeconds);
+					}
+				}
+			}
 		}
 		else
 		{
@@ -312,7 +377,8 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float Height)
 {
-	ImGui::BeginChild("BoneInformation", ImVec2(Width, Height), true);
+	const float padding = ImGui::GetStyle().WindowPadding.x;
+	ImGui::BeginChild("BoneInformation", ImVec2(Width - padding * 2, Height), true);
 	{
 		ImGui::Text("Bone Information");
 		ImGui::Separator();
