@@ -229,6 +229,7 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
     // 2.1 Bone 포인터 → 인덱스 매핑 생성
     TMap<UBone*, int32> BoneToIndexMap;
     TArray<FMatrix> BoneMatrices;
+    TArray<FMatrix> BoneInverseMatrices;  // Normal 변환용 Inverse 행렬 캐시
 
     int32 BoneIndex = 0;
     SkeletalMeshAsset->Skeleton->ForEachBone([&](UBone* Bone)
@@ -243,6 +244,10 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             FMatrix CurrentWorldMatrix = Bone->GetWorldTransform().ToMatrix();
             FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
             BoneMatrices.Add(SkinningMatrix);
+
+            // Normal 변환용 Inverse 행렬 계산 (비균등 스케일 대응)
+            FMatrix InverseSkinningMatrix = SkinningMatrix.Transpose().InverseAffine();
+            BoneInverseMatrices.Add(InverseSkinningMatrix);
 
             BoneIndex++;
         }
@@ -291,18 +296,14 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
                 continue;
 
             const FMatrix& SkinningMatrix = BoneMatrices[*BoneIndexPtr];
+            const FMatrix& InverseSkinningMatrix = BoneInverseMatrices[*BoneIndexPtr];
 
             // Position 변환
             FVector TransformedPos = SrcVertex.Position * SkinningMatrix;
             SkinnedPosition += TransformedPos * Weight;
 
-            // Normal 변환 (Rotation만 적용)
-            FMatrix RotationOnlyMatrix = SkinningMatrix;
-            RotationOnlyMatrix.M[3][0] = 0.0f;
-            RotationOnlyMatrix.M[3][1] = 0.0f;
-            RotationOnlyMatrix.M[3][2] = 0.0f;
-
-            FVector TransformedNormal = SrcVertex.Normal * RotationOnlyMatrix;
+            // Normal 변환 (비균등 스케일 대응: Inverse Transpose 사용)
+            FVector TransformedNormal = SrcVertex.Normal * InverseSkinningMatrix;
             SkinnedNormal += TransformedNormal * Weight;
         }
 
