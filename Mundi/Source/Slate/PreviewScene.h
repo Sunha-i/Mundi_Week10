@@ -6,7 +6,7 @@ class FPreviewScene
 {
 public:
     FPreviewScene() = default;
-    ~FPreviewScene() { DestroyWorldForPreviewScene(); }
+    ~FPreviewScene();
     void CreateWorldForPreviewScene();
     void DestroyWorldForPreviewScene();
 
