@@ -46,6 +46,7 @@
 #include "ShadowStats.h"
 #include "PlatformTime.h"
 #include "PostProcessing/VignettePass.h"
+#include "SkeletalMeshComponent.h"
 
 FSceneRenderer::FSceneRenderer(
 	UWorld* InWorld,
@@ -687,6 +688,7 @@ void FSceneRenderer::GatherVisibleProxies()
 	//PerformFrustumCulling();
 
 	const bool bDrawStaticMeshes = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_StaticMeshes);
+	const bool bDrawSkeletalMeshes = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_SkeletalMeshes);
 	const bool bDrawDecals = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Decals);
 	const bool bDrawFog = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Fog);
 	const bool bDrawLight = World->GetRenderSettings().IsShowFlagEnabled(EEngineShowFlags::SF_Lighting);
@@ -742,10 +744,10 @@ void FSceneRenderer::GatherVisibleProxies()
 						{
 							bShouldAdd = bDrawStaticMeshes;
 						}
-						// else if (USkeletalMeshComponent* SkeletalMeshComponent = ...)
-						// {
-						//     bShouldAdd = bDrawSkeletalMeshes;
-						// }
+						else if (USkeletalMeshComponent* SkeletalMeshComponent = Cast<USkeletalMeshComponent>(MeshComponent))
+						{
+							bShouldAdd = bDrawSkeletalMeshes;
+						}
 
 						if (bShouldAdd)
 						{

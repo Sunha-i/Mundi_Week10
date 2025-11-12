@@ -373,10 +373,13 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 			{
 				if (ImGui::IsMouseDown(0))
 				{
+					ASkeletalMeshActor* SkelActor = GetPreviewActor();
+					AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
+					if (!SkelActor || !Gizmo)	return;
+
 					FVector2D CurrentMousePosition(ImGui::GetMousePos().x, ImGui::GetMousePos().y);
 					FVector2D MouseOffset = CurrentMousePosition - DragStartMousePosition;
 
-					AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
 					FTransform NewWorldTransform = Gizmo->CalculateDragTransform(
 						DragStartBoneTransfrom, MouseOffset, PreviewCamera, &Viewport,
 					    CurrentGizmoMode, CurrentGizmoSpace, DraggingGizmoAxis, DragScreenVector
@@ -388,7 +391,7 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 					{
 						ParentWorldTransform = ParentBone->GetWorldTransform();
 					}
-					else if (ASkeletalMeshActor * SkelActor = GetPreviewActor())
+					else  // Root bone
 					{
 						if (USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent())
 						{
@@ -398,7 +401,11 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 
 					FTransform NewRelativeTransform = ParentWorldTransform.GetRelativeTransform(NewWorldTransform);
 					SelectedBone->SetRelativeTransform(NewRelativeTransform);
+
+					// Update
 					UpdateGizmoTransform();
+					MarkSkeletonOverlayDirty();
+					SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 				}
 
 				if (ImGui::IsMouseReleased(0))
@@ -552,38 +559,104 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 
 		FTransform RelTransform = SelectedBone->GetRelativeTransform();
 		FVector RelLoc = RelTransform.Translation;
-		FVector RelRot = RelTransform.Rotation.ToEulerZYXDeg();
+		FQuat RelQuat = RelTransform.Rotation;
 		FVector RelScale = RelTransform.Scale3D;
 
-		bool bChanged = false;
+		// 하이브리드 방식: Euler 각 직접 수정 + Delta만 Quaternion 적용
+		static FVector EditableEuler(0, 0, 0);
+		static FVector PreviousEuler(0, 0, 0);
+		static UBone* LastSelectedBone = nullptr;
+
+		// Bone이 바뀌면 Euler 각 초기화
+		if (LastSelectedBone != SelectedBone)
+		{
+			EditableEuler = RelQuat.ToEulerZYXDeg();
+			PreviousEuler = EditableEuler;
+			LastSelectedBone = SelectedBone;
+		}
+
+		bool bLocationChanged = false;
+		bool bRotationChanged = false;
+		bool bScaleChanged = false;
 
 		ImGui::Text("Location:");
 		ImGui::PushID("Location");
-		bChanged |= ImGui::DragFloat("X##Loc", &RelLoc.X, 0.1f);
-		bChanged |= ImGui::DragFloat("Y##Loc", &RelLoc.Y, 0.1f);
-		bChanged |= ImGui::DragFloat("Z##Loc", &RelLoc.Z, 0.1f);
+		bLocationChanged |= ImGui::DragFloat("X##Loc", &RelLoc.X, 0.1f);
+		bLocationChanged |= ImGui::DragFloat("Y##Loc", &RelLoc.Y, 0.1f);
+		bLocationChanged |= ImGui::DragFloat("Z##Loc", &RelLoc.Z, 0.1f);
 		ImGui::PopID();
 
 		ImGui::Text("Rotation:");
 		ImGui::PushID("Rotation");
-		bChanged |= ImGui::DragFloat("X##Rot", &RelRot.X, 0.5f);
-		bChanged |= ImGui::DragFloat("Y##Rot", &RelRot.Y, 0.5f);
-		bChanged |= ImGui::DragFloat("Z##Rot", &RelRot.Z, 0.5f);
+
+		bool bRotXChanged = ImGui::DragFloat("X (Roll)##Rot", &EditableEuler.X, 0.5f);
+		bool bRotYChanged = ImGui::DragFloat("Y (Pitch)##Rot", &EditableEuler.Y, 0.5f);
+		bool bRotZChanged = ImGui::DragFloat("Z (Yaw)##Rot", &EditableEuler.Z, 0.5f);
+
+		// Euler 각이 변경되면 Delta만큼 Quaternion 증분 회전
+		if (bRotXChanged || bRotYChanged || bRotZChanged)
+		{
+			// 변화량(Delta) 계산
+			FVector DeltaEuler = EditableEuler - PreviousEuler;
+
+			// Delta를 Quaternion 증분 회전으로 변환
+			FQuat DeltaQuat = FQuat::Identity();
+
+			if (std::fabs(DeltaEuler.X) > 0.01f)
+			{
+				FQuat RotX = FQuat::FromAxisAngle(FVector(1, 0, 0), DegreesToRadians(DeltaEuler.X));
+				DeltaQuat = DeltaQuat * RotX;
+			}
+			if (std::fabs(DeltaEuler.Y) > 0.01f)
+			{
+				FQuat RotY = FQuat::FromAxisAngle(FVector(0, 1, 0), DegreesToRadians(DeltaEuler.Y));
+				DeltaQuat = DeltaQuat * RotY;
+			}
+			if (std::fabs(DeltaEuler.Z) > 0.01f)
+			{
+				FQuat RotZ = FQuat::FromAxisAngle(FVector(0, 0, 1), DegreesToRadians(DeltaEuler.Z));
+				DeltaQuat = DeltaQuat * RotZ;
+			}
+
+			// 현재 Quaternion에 증분 적용 (Local Space)
+			RelQuat = RelQuat * DeltaQuat;
+			RelQuat.Normalize();
+
+			// EditableEuler는 사용자 입력값을 유지 (Quaternion에서 재추출하지 않음)
+			// 이렇게 하면 UI 표시가 사용자 입력과 일치하게 유지됨
+			PreviousEuler = EditableEuler;
+
+			bRotationChanged = true;
+		}
+
+		// Reset 버튼
+		if (ImGui::Button("Reset Rotation"))
+		{
+			RelQuat = FQuat::Identity();
+			EditableEuler = FVector(0, 0, 0);
+			PreviousEuler = FVector(0, 0, 0);
+			bRotationChanged = true;
+		}
+
+		// 현재 Quaternion 정보 표시
+		ImGui::TextDisabled("Quat: (%.3f, %.3f, %.3f, %.3f)",
+			RelQuat.X, RelQuat.Y, RelQuat.Z, RelQuat.W);
+
 		ImGui::PopID();
 
 		ImGui::Text("Scale:");
 		ImGui::PushID("Scale");
-		bChanged |= ImGui::DragFloat("X##Scl", &RelScale.X, 0.01f);
-		bChanged |= ImGui::DragFloat("Y##Scl", &RelScale.Y, 0.01f);
-		bChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
+		bScaleChanged |= ImGui::DragFloat("X##Scl", &RelScale.X, 0.01f);
+		bScaleChanged |= ImGui::DragFloat("Y##Scl", &RelScale.Y, 0.01f);
+		bScaleChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
 		ImGui::PopID();
 
 		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
-		
+
 		// 값이 변경되면 적용
-		if (bChanged)
+		if (bLocationChanged || bRotationChanged || bScaleChanged)
 		{
-			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
+			FTransform NewTransform(RelLoc, RelQuat, RelScale);
 			SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 			SelectedBone->SetRelativeTransform(NewTransform);
 			MarkSkeletonOverlayDirty();
@@ -635,6 +708,7 @@ void USkeletalMeshViewportWidget::UpdateGizmoVisibility()
 	AGizmoActor* Gizmo = WorldForPreviewManager.GetGizmo();
 	if (!Gizmo)    return;
 
+	Gizmo->SetMode(CurrentGizmoMode);
 	bool bHasSelection = (SelectedBone != nullptr);
 	Gizmo->ApplyGizmoVisualState(bHasSelection, CurrentGizmoMode, HoveredGizmoAxis);
 }
