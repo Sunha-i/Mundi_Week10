@@ -13,23 +13,46 @@ void ULineComponent::GetWorldLineData(TArray<FVector>& OutStartPoints, TArray<FV
         OutColors.clear();
         return;
     }
-    
+
+    // Use cached data if available and valid
+    if (!bWorldDataDirty && !CachedStartPoints.empty())
+    {
+        OutStartPoints = CachedStartPoints;
+        OutEndPoints = CachedEndPoints;
+        OutColors = CachedColors;
+        return;
+    }
+
+    // Recalculate world coordinates
+    CachedStartPoints.clear();
+    CachedEndPoints.clear();
+    CachedColors.clear();
+
     FMatrix worldMatrix = GetWorldMatrix();
     size_t lineCount = Lines.size();
-    
+
+    CachedStartPoints.reserve(lineCount);
+    CachedEndPoints.reserve(lineCount);
+    CachedColors.reserve(lineCount);
+
     for (const ULine* Line : Lines)
     {
         if (Line)
         {
             FVector worldStart, worldEnd;
             Line->GetWorldPoints(worldMatrix, worldStart, worldEnd);
-            
-            OutStartPoints.push_back(worldStart);
-            OutEndPoints.push_back(worldEnd);
-            OutColors.push_back(Line->GetColor());
+
+            CachedStartPoints.push_back(worldStart);
+            CachedEndPoints.push_back(worldEnd);
+            CachedColors.push_back(Line->GetColor());
         }
     }
-    return;
+
+    bWorldDataDirty = false;
+
+    OutStartPoints = CachedStartPoints;
+    OutEndPoints = CachedEndPoints;
+    OutColors = CachedColors;
 }
 
 void ULineComponent::DuplicateSubObjects()
@@ -63,21 +86,23 @@ ULine* ULineComponent::AddLine(const FVector& StartPoint, const FVector& EndPoin
     ULine* NewLine = NewObject<ULine>();
     NewLine->SetLine(StartPoint, EndPoint);
     NewLine->SetColor(Color);
-    
+
     Lines.push_back(NewLine);
-    
+    bWorldDataDirty = true;  // Cache invalidation
+
     return NewLine;
 }
 
 void ULineComponent::RemoveLine(ULine* Line)
 {
     if (!Line) return;
-    
+
     auto it = std::find(Lines.begin(), Lines.end(), Line);
     if (it != Lines.end())
     {
         DeleteObject(*it);
         Lines.erase(it);
+        bWorldDataDirty = true;  // Cache invalidation
     }
 }
 
@@ -91,6 +116,13 @@ void ULineComponent::ClearLines()
         }
     }
     Lines.Empty();
+    bWorldDataDirty = true;  // Cache invalidation
+}
+
+void ULineComponent::OnTransformUpdated()
+{
+    Super::OnTransformUpdated();
+    bWorldDataDirty = true;  // Invalidate cache when transform changes
 }
 
 void ULineComponent::CollectLineBatches(URenderer* Renderer)
@@ -100,20 +132,15 @@ void ULineComponent::CollectLineBatches(URenderer* Renderer)
 
     TArray<FVector> startPoints, endPoints;
     TArray<FVector4> colors;
-    
-    // Extract world coordinate line data efficiently
+
+    // Extract world coordinate line data efficiently (uses cache)
     GetWorldLineData(startPoints, endPoints, colors);
-    
+
     // Add all lines to renderer batch at once
     if (!startPoints.empty())
     {
         Renderer->AddLines(startPoints, endPoints, colors);
     }
-    startPoints.clear();
-    startPoints.Shrink();
-    endPoints.clear();
-    endPoints.Shrink();
-    colors.clear();
-    colors.Shrink();
+    // No need to clear/shrink - local arrays will be destroyed automatically
 }
 

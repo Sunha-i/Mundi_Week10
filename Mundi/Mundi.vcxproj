@@ -111,7 +111,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);ThirdParty\Lua\lib\$(BaseConfiguration)\;ThirdParty\DirectXTex\lib\$(BaseConfiguration)\;ThirdParty\DirectXTK\lib\$(BaseConfiguration)\;ThirdParty\FBXSDK\lib\$(BaseConfiguration)\</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);Lua.lib;libfbxsdk.lib</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);libfbxsdk.lib</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4099 %(AdditionalOptions)</AdditionalOptions>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
@@ -139,7 +139,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);ThirdParty\Lua\lib\$(BaseConfiguration)\;ThirdParty\DirectXTex\lib\$(BaseConfiguration)\;ThirdParty\DirectXTK\lib\$(BaseConfiguration)\;ThirdParty\FBXSDK\lib\$(BaseConfiguration)\</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);Lua.lib;libfbxsdk.lib</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);libfbxsdk.lib</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4099 %(AdditionalOptions)</AdditionalOptions>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
@@ -171,7 +171,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);ThirdParty\Lua\lib\$(BaseConfiguration)\;ThirdParty\DirectXTex\lib\$(BaseConfiguration)\;ThirdParty\DirectXTK\lib\$(BaseConfiguration)\;ThirdParty\FBXSDK\lib\$(BaseConfiguration)\</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);Lua.lib;libfbxsdk.lib</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);libfbxsdk.lib</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PreBuildEvent>
@@ -202,7 +202,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);ThirdParty\Lua\lib\$(BaseConfiguration)\;ThirdParty\DirectXTex\lib\$(BaseConfiguration)\;ThirdParty\DirectXTK\lib\$(BaseConfiguration)\;ThirdParty\FBXSDK\lib\$(BaseConfiguration)\</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);Lua.lib;libfbxsdk.lib</AdditionalDependencies>
+      <AdditionalDependencies>DirectXTK.lib;DirectXTex.lib;%(AdditionalDependencies);libfbxsdk.lib</AdditionalDependencies>
       <AdditionalOptions>/IGNORE:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PreBuildEvent>
@@ -920,4 +920,166 @@
     <!-- 5. 최종 실행 (EncodedCommand 사용) -->
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $(EncodedScript)" Condition="'$(EncodedScript)' != ''" />
   </Target>
+  <ItemGroup>
+    <ClCompile Include="ThirdParty\Lua\src\lapi.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lauxlib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lbaselib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lcode.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lcorolib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lctype.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldblib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldebug.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldo.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ldump.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lfunc.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lgc.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\linit.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\liolib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\llex.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lmathlib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lmem.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\loadlib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lobject.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lopcodes.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\loslib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lparser.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lstate.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lstring.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lstrlib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ltable.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ltablib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\ltm.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lundump.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lutf8lib.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lvm.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="ThirdParty\Lua\src\lzio.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>ThirdParty\Lua\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemGroup>
 </Project>

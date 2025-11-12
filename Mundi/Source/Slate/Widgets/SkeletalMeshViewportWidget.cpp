@@ -14,13 +14,16 @@
 #include "Skeleton.h"
 #include "Bone.h"
 #include "SkeletalMesh.h"
+#include "LineComponent.h"
 
 IMPLEMENT_CLASS(USkeletalMeshViewportWidget)
 
 USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 {
 	WorldForPreviewManager.CreateWorldForPreviewScene();
-	WorldForPreviewManager.SetDirectionalLight({ 135.f, 135.f, 0.f });
+	WorldForPreviewManager.SetDirectionalLight(
+		{ 0.f, 0.f, 180.f }, {0.f,0.f,-90.f}
+	);
 
 	// ViewportClient 생성 (내부적으로 Camera 생성)
 	Viewport.SetViewportClient(new FViewportClient());
@@ -32,8 +35,8 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 	PreviewCamera = Viewport.GetViewportClient()->GetCamera();
 	if (PreviewCamera)
 	{
-		PreviewCamera->SetActorLocation({ 2.f, 0.f, 1.f });
-		PreviewCamera->SetRotationFromEulerAngles({ 0.f, 0.f, 180.f });
+		PreviewCamera->SetActorLocation({1.7f, 0.f, 0.7f});
+		PreviewCamera->SetRotationFromEulerAngles({0.f, 0.f, 180.f});
 		WorldForPreviewManager.SetCamera(PreviewCamera);
 	}
 	bIsDraggingViewport = false;
@@ -56,6 +59,17 @@ USkeletalMeshViewportWidget::USkeletalMeshViewportWidget()
 
 USkeletalMeshViewportWidget::~USkeletalMeshViewportWidget()
 {
+	ClearSkeletonOverlay(true);
+	if (PreviewActor)
+	{
+		if (UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview())
+		{
+			PreviewWorld->RemoveEditorActor(PreviewActor);
+		}
+		PreviewActor->Destroy();
+		PreviewActor = nullptr;
+	}
+
 	ReleasePreviewRenderTarget();
 	WorldForPreviewManager.DestroyWorldForPreviewScene();
 
@@ -77,6 +91,14 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 		return;
 	}
 
+	if (PreviewActor)
+	{
+		PreviewWorld->RemoveEditorActor(PreviewActor);
+		ClearSkeletonOverlay(true);
+		PreviewActor->Destroy();
+		PreviewActor = nullptr;
+	}
+
 	// Actor 생성 및 Mesh 설정
 	ASkeletalMeshActor* SkeletalMeshActor = NewObject<ASkeletalMeshActor>();
 
@@ -91,6 +113,9 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 	}
 
 	WorldForPreviewManager.SetActor(SkeletalMeshActor);
+	PreviewWorld->AddEditorActor(SkeletalMeshActor);
+	PreviewActor = SkeletalMeshActor;
+	MarkSkeletonOverlayDirty();
 }
 
 void USkeletalMeshViewportWidget::RenderWidget()
@@ -198,6 +223,7 @@ void USkeletalMeshViewportWidget::RenderBoneNode(UBone* Bone)
 	if (ImGui::IsItemClicked())
 	{
 		SelectedBone = Bone;
+		MarkSkeletonOverlayDirty(); // 선택 변경 시 스켈레톤 오버레이 다시 그리기
 	}
 
 	// 자식이 있으면 재귀적으로 렌더링
@@ -220,7 +246,28 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		ImGui::Text("Mesh: %s", TargetMeshName.ToString().c_str());
 		ImGui::Separator();
 
-		// +-+-+ Debug Info +-+-+
+		const bool bHasMeshLoaded = HasLoadedSkeletalMesh();
+		ImGui::BeginDisabled(!bHasMeshLoaded);
+		bool bOverlayToggle = bShowSkeletonOverlay;
+		if (ImGui::Checkbox("Skeleton Overlay", &bOverlayToggle))
+		{
+			ToggleSkeletonOverlay(bOverlayToggle);
+		}
+		ImGui::EndDisabled();
+
+		if (!bHasMeshLoaded)
+		{
+			ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Load a skeletal mesh to enable overlays.");
+		}
+
+		ImGui::Separator();
+
+		if (bShowSkeletonOverlay)
+		{
+			UpdateSkeletonOverlayIfNeeded();
+		}
+
+		// 디버그 정보 표시
 		// ImGui::Text("Debug Info:");
 		// ImGui::Text("- PreviewSRV: %s", PreviewSRV ? "OK" : "NULL");
 		// ImGui::Text("- PreviewTexture: %s", PreviewTexture ? "OK" : "NULL");
@@ -460,6 +507,7 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		{
 			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
 			SelectedBone->SetRelativeTransform(NewTransform);
+			MarkSkeletonOverlayDirty();
 		}
 
 		ImGui::Unindent();
@@ -501,4 +549,95 @@ void USkeletalMeshViewportWidget::ReleasePreviewRenderTarget()
 
 	PreviewTextureWidth = 0;
 	PreviewTextureHeight = 0;
+}
+
+bool USkeletalMeshViewportWidget::HasLoadedSkeletalMesh() const
+{
+	if (!PreviewActor)
+	{
+		return false;
+	}
+
+	USkeletalMeshComponent* MeshComp = PreviewActor->GetSkeletalMeshComponent();
+	if (!MeshComp)
+	{
+		return false;
+	}
+
+	USkeletalMesh* SkeletalMesh = MeshComp->GetSkeletalMesh();
+	if (!SkeletalMesh)
+	{
+		return false;
+	}
+
+	FSkeletalMesh* MeshAsset = SkeletalMesh->GetSkeletalMeshAsset();
+	return MeshAsset && MeshAsset->Skeleton && MeshAsset->Skeleton->GetRoot();
+}
+
+void USkeletalMeshViewportWidget::ToggleSkeletonOverlay(bool bEnable)
+{
+	if (bShowSkeletonOverlay == bEnable)
+	{
+		return;
+	}
+
+	bShowSkeletonOverlay = bEnable;
+	if (bShowSkeletonOverlay)
+	{
+		MarkSkeletonOverlayDirty();
+	}
+	else
+	{
+		ClearSkeletonOverlay(false);
+	}
+}
+
+void USkeletalMeshViewportWidget::UpdateSkeletonOverlayIfNeeded()
+{
+	if (!bShowSkeletonOverlay)
+	{
+		return;
+	}
+
+	ASkeletalMeshActor* SkeletalActor = GetPreviewActor();
+	if (!SkeletalActor)
+	{
+		return;
+	}
+
+	// Ensure overlay component exists
+	ULineComponent* SkeletonLineComponent = nullptr;
+	if (UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview())
+	{
+		SkeletonLineComponent = SkeletalActor->EnsureSkeletonOverlay(PreviewWorld);
+	}
+	if (!SkeletonLineComponent)
+	{
+		return;
+	}
+
+	// Show existing lines if not dirty
+	if (!bSkeletonLinesDirty && SkeletonLineComponent->GetLineCount() > 0)
+	{
+		SkeletonLineComponent->SetLineVisible(true);
+		return;
+	}
+
+	// Delegate skeleton building to the actor (선택된 본 정보 전달)
+	SkeletalActor->BuildSkeletonOverlay(SelectedBone);
+	bSkeletonLinesDirty = false;
+}
+
+void USkeletalMeshViewportWidget::ClearSkeletonOverlay(bool bReleaseComponent)
+{
+	if (ASkeletalMeshActor* SkelActor = GetPreviewActor())
+	{
+		SkelActor->ClearSkeletonOverlay(bReleaseComponent);
+	}
+	bSkeletonLinesDirty = true;
+}
+
+void USkeletalMeshViewportWidget::MarkSkeletonOverlayDirty()
+{
+	bSkeletonLinesDirty = true;
 }

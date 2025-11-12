@@ -4,6 +4,10 @@
 #include "FViewport.h"
 
 class USkeletalMesh;
+class ASkeletalMeshActor;
+class USkeletalMeshComponent;
+class ULineComponent;
+
 class USkeletalMeshViewportWidget : public UWidget
 {
 public:
@@ -24,6 +28,14 @@ private:
 	// Bone Hierarchy 재귀 렌더링
 	void RenderBoneNode(class UBone* Bone);
 
+    // Skeleton overlay helpers
+    void ToggleSkeletonOverlay(bool bEnable);
+    void UpdateSkeletonOverlayIfNeeded();
+    void ClearSkeletonOverlay(bool bReleaseComponent);
+    void MarkSkeletonOverlayDirty();
+	ASkeletalMeshActor* GetPreviewActor() const { return PreviewActor; }
+	bool HasLoadedSkeletalMesh() const;
+
 	// Preview RenderTarget 관리
 	bool CreatePreviewRenderTarget(uint32 Width, uint32 Height);
 	void ReleasePreviewRenderTarget();
@@ -37,6 +49,10 @@ private:
 	inline const static uint32 DEFAULT_VIEWPORT_WIDTH = 512;
 	inline const static uint32 DEFAULT_VIEWPORT_HEIGHT = 512;
 
+	bool bShowSkeletonOverlay = false;
+    bool bSkeletonLinesDirty = false;
+
+    ASkeletalMeshActor* PreviewActor = nullptr;
 	// PreviewScene의 카메라
 	ACameraActor* PreviewCamera;
 	bool bIsDraggingViewport;	// store dragging status

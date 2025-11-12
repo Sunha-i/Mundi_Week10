@@ -248,4 +248,13 @@ void UBone::DuplicateSubObjects()
 void UBone::PostDuplicate()
 {
     Super::PostDuplicate();
+
+    // 복제된 Children의 Parent 포인터를 재설정
+    for (UBone* Child : Children)
+    {
+        if (Child)
+        {
+            Child->SetParent(this);
+        }
+    }
 }

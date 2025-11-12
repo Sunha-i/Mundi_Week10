@@ -4,6 +4,11 @@
 #include "ObjectFactory.h"
 #include "BillboardComponent.h"
 #include "ShapeComponent.h"
+#include "LineComponent.h"
+#include "World.h"
+#include "Skeleton.h"
+#include "Bone.h"
+#include "SkeletalMesh.h"
 
 IMPLEMENT_CLASS(ASkeletalMeshActor)
 BEGIN_PROPERTIES(ASkeletalMeshActor)
@@ -26,7 +31,11 @@ void ASkeletalMeshActor::Tick(float DeltaTime)
 
 ASkeletalMeshActor::~ASkeletalMeshActor()
 {
-   
+    if (SkeletonOverlay)
+    {
+        SkeletonOverlay->DestroyComponent();
+        SkeletonOverlay = nullptr;
+    }
 }
 
 FAABB ASkeletalMeshActor::GetBounds() const
@@ -72,4 +81,195 @@ void ASkeletalMeshActor::Serialize(const bool bInIsLoading, JSON& InOutHandle)
     {
         SkeletalMeshComponent = Cast<USkeletalMeshComponent>(RootComponent);
     }
+}
+
+ULineComponent* ASkeletalMeshActor::EnsureSkeletonOverlay(UWorld* World)
+{
+    if (SkeletonOverlay)
+        return SkeletonOverlay;
+
+    if (!SkeletalMeshComponent)
+        return nullptr;
+
+    ULineComponent* NewLine = NewObject<ULineComponent>();
+    if (!NewLine)
+        return nullptr;
+
+    NewLine->SetupAttachment(SkeletalMeshComponent);
+    NewLine->SetRequiresGridShowFlag(false);
+    NewLine->SetAlwaysOnTop(true);
+
+    AddOwnedComponent(NewLine);
+    if (World)
+    {
+        NewLine->RegisterComponent(World);
+    }
+
+    SkeletonOverlay = NewLine;
+    return SkeletonOverlay;
+}
+
+void ASkeletalMeshActor::ClearSkeletonOverlay(bool bDestroyComponent)
+{
+    if (!SkeletonOverlay)
+        return;
+
+    SkeletonOverlay->ClearLines();
+    SkeletonOverlay->SetLineVisible(false);
+
+    if (bDestroyComponent)
+    {
+        SkeletonOverlay->DestroyComponent();
+        SkeletonOverlay = nullptr;
+    }
+}
+
+void ASkeletalMeshActor::BuildSkeletonOverlay(UBone* SelectedBone)
+{
+    if (!SkeletalMeshComponent)
+        return;
+
+    USkeletalMesh* SkeletalMesh = SkeletalMeshComponent->GetSkeletalMesh();
+    FSkeletalMesh* MeshAsset = SkeletalMesh ? SkeletalMesh->GetSkeletalMeshAsset() : nullptr;
+    USkeleton* Skeleton = MeshAsset ? MeshAsset->Skeleton : nullptr;
+    if (!Skeleton || !Skeleton->GetRoot())
+        return;
+
+    if (!SkeletonOverlay)
+        return;
+
+    SkeletonOverlay->ClearLines();  // This marks cache as dirty automatically
+
+    const FTransform ComponentInverse = SkeletalMeshComponent->GetWorldTransform().Inverse();
+    BuildSkeletonLinesRecursive(Skeleton->GetRoot(), ComponentInverse, SkeletonOverlay, SelectedBone);
+    SkeletonOverlay->SetLineVisible(true);
+}
+
+void ASkeletalMeshActor::BuildSkeletonLinesRecursive(UBone* Bone, const FTransform& ComponentWorldInverse, ULineComponent* SkeletonLineComponent, UBone* SelectedBone)
+{
+    if (!Bone || !SkeletonLineComponent)
+        return;
+
+    // 본의 월드 트랜스폼 (회전 포함)
+    const FTransform BoneWorld = Bone->GetWorldTransform();
+
+    // 로컬 공간으로 변환 (직접 멤버 접근)
+    const FVector ParentLocal = ComponentWorldInverse.TransformPosition(BoneWorld.Translation);
+    const FQuat RotationLocal = ComponentWorldInverse.Rotation.Inverse() * BoneWorld.Rotation;
+
+    // 색상 결정: 선택된 본이면 초록색, 아니면 흰색
+    const bool bIsSelected = (Bone == SelectedBone);
+    const FVector4 JointColor = bIsSelected ? FVector4(0.2f, 1.0f, 0.2f, 1.0f) : FVector4(1.f, 1.f, 1.f, 1.f);
+
+    // 관절 구체 추가
+    AddJointSphereOriented(ParentLocal, RotationLocal, SkeletonLineComponent, JointColor);
+
+    // 자식 본 처리
+    for (UBone* Child : Bone->GetChildren())
+    {
+        if (!Child)
+            continue;
+
+        // 자식 본의 로컬 위치 계산
+        const FVector ChildLocal = ComponentWorldInverse.TransformPosition(Child->GetWorldLocation());
+
+        // 피라미드 색상 결정: 선택된 본에서 자식으로 가는 라인이면 초록색, 부모에서 선택된 본으로 들어오면 주황색
+        FVector4 PyramidColor = FVector4(1.f, 1.f, 1.f, 1.f); // 기본 흰색
+        if (bIsSelected)
+        {
+            // 선택된 본에서 자식으로 가는 피라미드는 초록색
+            PyramidColor = FVector4(0.2f, 1.0f, 0.2f, 1.0f);
+        }
+        else if (Child == SelectedBone)
+        {
+            // 부모 본에서 선택된 본으로 들어오는 피라미드는 주황색
+            PyramidColor = FVector4(1.0f, 0.5f, 0.0f, 1.0f);
+        }
+
+        // 부모→자식 방향으로 본 피라미드 생성
+        AddBonePyramid(ParentLocal, ChildLocal, SkeletonLineComponent, PyramidColor);
+
+        // 재귀 호출 (자식 뼈대도 처리)
+        BuildSkeletonLinesRecursive(Child, ComponentWorldInverse, SkeletonLineComponent, SelectedBone);
+    }
+}
+
+void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, const FQuat& RotationLocal, ULineComponent* SkeletonLineComponent, const FVector4& Color)
+{
+    if (!SkeletonLineComponent)
+        return;
+
+    const float Radius = 0.015f;
+    const int32 Segments = 8;  // Reduced from 16 to 8 for performance (50% fewer lines)
+    const float DeltaAngle = 2.0f * 3.1415926535f / Segments;
+
+    // 기본 축 3개 (회전 적용 전)
+    const FVector Axes[3] = {
+        FVector(1.f, 0.f, 0.f),
+        FVector(0.f, 1.f, 0.f),
+        FVector(0.f, 0.f, 1.f)
+    };
+
+    for (int AxisIdx = 0; AxisIdx < 3; ++AxisIdx)
+    {
+        FVector Axis1 = RotationLocal.RotateVector(Axes[AxisIdx]);
+        FVector Axis2 = RotationLocal.RotateVector(Axes[(AxisIdx + 1) % 3]);
+
+        FVector PrevPoint = CenterLocal + Axis1 * Radius;
+
+        for (int i = 1; i <= Segments; ++i)
+        {
+            const float Angle = i * DeltaAngle;
+            const float CosA = cosf(Angle);
+            const float SinA = sinf(Angle);
+
+            FVector CurrPoint = CenterLocal + (Axis1 * CosA + Axis2 * SinA) * Radius;
+            SkeletonLineComponent->AddLine(PrevPoint, CurrPoint, Color);
+            PrevPoint = CurrPoint;
+        }
+    }
+}
+
+void ASkeletalMeshActor::AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* SkeletonLineComponent, const FVector4& Color)
+{
+    if (!SkeletonLineComponent)
+        return;
+
+    FVector Dir = ChildLocal - ParentLocal;
+    float Length = Dir.Size();
+    if (Length < KINDA_SMALL_NUMBER)
+        return;
+
+    FVector Forward = Dir / Length;
+
+    // 보조축 계산 (Forward 방향과 거의 평행하지 않게)
+    FVector Up(0.f, 0.f, 1.f);
+    if (fabsf(FVector::Dot(Up, Forward)) > 0.99f)
+    {
+        Up = FVector(0.f, 1.f, 0.f); // 축이 겹칠 경우 다른 Up 사용
+    }
+
+    FVector Right = FVector::Cross(Up, Forward).GetSafeNormal();
+    FVector TrueUp = FVector::Cross(Forward, Right).GetSafeNormal();
+
+    // 피라미드 밑면 크기 (비례하되 최대값 제한)
+    float BaseRadius = std::min(Length * 0.05f, 0.01f);
+
+    // 부모 관절 기준 밑면 세 점 (삼각형)
+    FVector BaseA = ParentLocal + (Right * BaseRadius) + (TrueUp * BaseRadius);
+    FVector BaseB = ParentLocal - (Right * BaseRadius) + (TrueUp * BaseRadius);
+    FVector BaseC = ParentLocal - (TrueUp * BaseRadius * 1.5f);
+
+    // 자식 관절이 피라미드의 Apex
+    FVector Apex = ChildLocal;
+
+    // 밑면 삼각형 윤곽선
+    SkeletonLineComponent->AddLine(BaseA, BaseB, Color);
+    SkeletonLineComponent->AddLine(BaseB, BaseC, Color);
+    SkeletonLineComponent->AddLine(BaseC, BaseA, Color);
+
+    // 각 밑면 점과 꼭짓점 연결
+    SkeletonLineComponent->AddLine(BaseA, Apex, Color);
+    SkeletonLineComponent->AddLine(BaseB, Apex, Color);
+    SkeletonLineComponent->AddLine(BaseC, Apex, Color);
 }

@@ -41,7 +41,7 @@ void FPreviewScene::SetActor(AActor* InActor)
     WorldForPreview->AddActorToLevel(InActor);
 }
 
-void FPreviewScene::SetDirectionalLight(const FVector& LightRotation)
+void FPreviewScene::SetDirectionalLight(const FVector& LightRotation, const FVector& LightLocation)
 {
     if (!WorldForPreview)
         UE_LOG("[FPreviewScene::SetDirectionalLight] Warning : WorldForPreview is null.");
@@ -49,6 +49,7 @@ void FPreviewScene::SetDirectionalLight(const FVector& LightRotation)
     ADirectionalLightActor* LightActor =
         NewObject<ADirectionalLightActor>();
     LightActor->SetActorRotation(LightRotation);
+    LightActor->SetActorLocation(LightLocation);
     SetActor(LightActor);
 }
 
