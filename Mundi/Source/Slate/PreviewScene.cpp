@@ -79,7 +79,7 @@ void FPreviewScene::SetGizmo()
     if (!Gizmo)
     {
         Gizmo = NewObject<AGizmoActor>();
-        SetActor(Gizmo);
+        WorldForPreview->AddEditorActor(Gizmo);
     }
 }
 
