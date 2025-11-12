@@ -435,38 +435,73 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 
 		FTransform RelTransform = SelectedBone->GetRelativeTransform();
 		FVector RelLoc = RelTransform.Translation;
-		FVector RelRot = RelTransform.Rotation.ToEulerZYXDeg();
+		FQuat RelQuat = RelTransform.Rotation;
 		FVector RelScale = RelTransform.Scale3D;
 
-		bool bChanged = false;
+		// 편집 가능한 Euler 각 (매 프레임 현재 Quaternion에서 변환)
+		static FVector EditableEuler(0, 0, 0);
+		static UBone* LastSelectedBone = nullptr;
+
+		// Bone이 바뀌면 Euler 각 초기화
+		if (LastSelectedBone != SelectedBone)
+		{
+			EditableEuler = RelQuat.ToEulerZYXDeg();
+			LastSelectedBone = SelectedBone;
+		}
+
+		bool bLocationChanged = false;
+		bool bRotationChanged = false;
+		bool bScaleChanged = false;
 
 		ImGui::Text("Location:");
 		ImGui::PushID("Location");
-		bChanged |= ImGui::DragFloat("X##Loc", &RelLoc.X, 0.1f);
-		bChanged |= ImGui::DragFloat("Y##Loc", &RelLoc.Y, 0.1f);
-		bChanged |= ImGui::DragFloat("Z##Loc", &RelLoc.Z, 0.1f);
+		bLocationChanged |= ImGui::DragFloat("X##Loc", &RelLoc.X, 0.1f);
+		bLocationChanged |= ImGui::DragFloat("Y##Loc", &RelLoc.Y, 0.1f);
+		bLocationChanged |= ImGui::DragFloat("Z##Loc", &RelLoc.Z, 0.1f);
 		ImGui::PopID();
 
-		ImGui::Text("Rotation:");
+		ImGui::Text("Rotation (Euler → Quaternion):");
 		ImGui::PushID("Rotation");
-		bChanged |= ImGui::DragFloat("X##Rot", &RelRot.X, 0.5f);
-		bChanged |= ImGui::DragFloat("Y##Rot", &RelRot.Y, 0.5f);
-		bChanged |= ImGui::DragFloat("Z##Rot", &RelRot.Z, 0.5f);
+
+		bool bRotXChanged = ImGui::DragFloat("X (Roll)##Rot", &EditableEuler.X, 0.5f);
+		bool bRotYChanged = ImGui::DragFloat("Y (Pitch)##Rot", &EditableEuler.Y, 0.5f);
+		bool bRotZChanged = ImGui::DragFloat("Z (Yaw)##Rot", &EditableEuler.Z, 0.5f);
+
+		// Euler 각이 변경되면 Quaternion으로 변환
+		if (bRotXChanged || bRotYChanged || bRotZChanged)
+		{
+			RelQuat = FQuat::MakeFromEulerZYX(EditableEuler);
+			RelQuat.Normalize();
+			bRotationChanged = true;
+		}
+
+		// Reset 버튼
+		if (ImGui::Button("Reset Rotation"))
+		{
+			RelQuat = FQuat::Identity();
+			EditableEuler = FVector(0, 0, 0);
+			bRotationChanged = true;
+		}
+
+		// 현재 Quaternion 정보 표시
+		ImGui::TextDisabled("Quat: (%.3f, %.3f, %.3f, %.3f)",
+			RelQuat.X, RelQuat.Y, RelQuat.Z, RelQuat.W);
+
 		ImGui::PopID();
 
 		ImGui::Text("Scale:");
 		ImGui::PushID("Scale");
-		bChanged |= ImGui::DragFloat("X##Scl", &RelScale.X, 0.01f);
-		bChanged |= ImGui::DragFloat("Y##Scl", &RelScale.Y, 0.01f);
-		bChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
+		bScaleChanged |= ImGui::DragFloat("X##Scl", &RelScale.X, 0.01f);
+		bScaleChanged |= ImGui::DragFloat("Y##Scl", &RelScale.Y, 0.01f);
+		bScaleChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
 		ImGui::PopID();
 
 		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
-		
+
 		// 값이 변경되면 적용
-		if (bChanged)
+		if (bLocationChanged || bRotationChanged || bScaleChanged)
 		{
-			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
+			FTransform NewTransform(RelLoc, RelQuat, RelScale);
 			SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 			SelectedBone->SetRelativeTransform(NewTransform);
 			MarkSkeletonOverlayDirty();
