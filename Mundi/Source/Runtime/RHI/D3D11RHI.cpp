@@ -1,4 +1,7 @@
 ﻿#include "pch.h"
+
+#include <types.hpp>
+
 #include "StatsOverlayD2D.h"
 #include "Color.h"
 
@@ -79,6 +82,20 @@ void D3D11RHI::Release()
 
     // Device + SwapChain
     ReleaseDeviceAndSwapChain();
+
+    for (auto It = TextureTargets.begin(); It != TextureTargets.end(); It++)
+    {
+        FTextureWidthTarget TextureTarget = It->second;
+
+        if (TextureTarget.Texture)
+            TextureTarget.Texture->Release();
+        if (TextureTarget.RTV)
+            TextureTarget.RTV->Release();
+        if (TextureTarget.DepthDSV)
+            TextureTarget.DepthDSV->Release();
+        if (TextureTarget.DepthTexture)
+            TextureTarget.DepthTexture->Release();
+    }
 }
 
 void D3D11RHI::ClearAllBuffer()
@@ -1330,6 +1347,52 @@ HRESULT D3D11RHI::CreateRenderTargetWithDepth(
     }
 
     return S_OK;
+}
+
+HRESULT D3D11RHI::GetOrCreateTextureWithTarget(
+        UINT Width,
+        UINT Height,
+        ID3D11Texture2D** OutColorTexture,
+        ID3D11RenderTargetView** OutColorRTV,
+        ID3D11Texture2D** OutDepthTexture,
+        ID3D11DepthStencilView** OutDepthDSV
+)
+{
+    HRESULT hr = S_OK;
+    FString Key = std::to_string(Width) + "_" + std::to_string(Height);
+
+    auto Found = TextureTargets.find(Key);
+    if (Found == TextureTargets.end())
+    {
+        FTextureWidthTarget NewTexture;
+        hr= CreateRenderTargetWithDepth(
+            Width,
+            Height,
+            &NewTexture.Texture,
+            &NewTexture.RTV,
+            &NewTexture.DepthTexture,
+            &NewTexture.DepthDSV
+        );
+
+        if (FAILED(hr))
+            return hr;
+
+        TextureTargets[Key] = NewTexture;
+        *OutColorTexture = NewTexture.Texture;
+        *OutColorRTV = NewTexture.RTV;
+        *OutDepthTexture = NewTexture.DepthTexture;
+        *OutDepthDSV = NewTexture.DepthDSV;
+    }
+    else
+    {
+        FTextureWidthTarget Texture = TextureTargets[Key];
+        *OutColorTexture = Texture.Texture;
+        *OutColorRTV = Texture.RTV;
+        *OutDepthTexture = Texture.DepthTexture;
+        *OutDepthDSV = Texture.DepthDSV;
+    }
+
+    return hr;
 }
 
 void D3D11RHI::ReleaseRenderTargetWithDepth(
