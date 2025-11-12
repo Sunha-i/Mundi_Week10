@@ -254,11 +254,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 			UpdateSkeletonOverlayIfNeeded();
 		}
 
-		// 디버그 정보 표시
-		// ImGui::Text("Debug Info:");
-		// ImGui::Text("- PreviewSRV: %s", PreviewSRV ? "OK" : "NULL");
-		// ImGui::Text("- PreviewTexture: %s", PreviewTexture ? "OK" : "NULL");
-
 		// +-+-+ Dynamic Resizing +-+-+
 		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 		float newWidth = viewportPanelSize.x;
@@ -273,7 +268,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		}
 
 		FViewportClient* ViewportClient = Viewport.GetViewportClient();
-		// ImGui::Text("- ViewportClient: %s", ViewportClient ? "OK" : "NULL");
 
 		ID3D11Texture2D* RenderedTexture = nullptr;
 		RenderedTexture = ViewportClient->DrawToTexture(&Viewport);
@@ -507,12 +501,6 @@ void USkeletalMeshViewportWidget::RenderViewportPanel(float Width, float Height)
 		else
 		{
 			ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Cannot display: condition failed");
-		}
-
-		// 임시 텍스처 해제 (DrawToTexture에서 생성된 것)
-		if (RenderedTexture)
-		{
-			RenderedTexture->Release();
 		}
 	}
 	ImGui::EndChild();
