@@ -145,6 +145,7 @@ struct FSkeletalCacheData
 	TArray<FSkeletalCacheFlesh> Fleshes;
 	TArray<FSkeletalCacheBone> Bones;
 	TArray<FSkinnedVertex> SkinnedVertices;  // CPU Skinning용 정점 데이터
+	TArray<TArray<FString>> VertexBoneNames;  // 각 정점의 BonePointers를 이름으로 저장
 
 	// 메시 + 본 전체 직렬화 (저장/읽기)
 	friend FArchive& operator<<(FArchive& Ar, FSkeletalCacheData& Data)
@@ -211,8 +212,40 @@ struct FSkeletalCacheData
 			{
 				// FVertexDynamic 부분
 				Ar << SV.Position << SV.Normal << SV.UV << SV.Tangent << SV.Color;
-				// Skinning 데이터 (BonePointers는 nullptr로 초기화됨, 재파싱 필요)
+				// Skinning 데이터 (BoneWeights 로드, BonePointers는 나중에 복원)
 				Ar.Serialize(&SV.BoneWeights[0], sizeof(float) * 4);
+				// BonePointers 초기화
+				for (int i = 0; i < 4; i++)
+				{
+					SV.BonePointers[i] = nullptr;
+				}
+			}
+		}
+
+		// VertexBoneNames 직렬화
+		uint32 VertexBoneNamesCount = static_cast<uint32>(Data.VertexBoneNames.size());
+		Ar << VertexBoneNamesCount;
+		if (Ar.IsSaving())
+		{
+			for (const auto& BoneNames : Data.VertexBoneNames)
+			{
+				for (int i = 0; i < 4; i++)
+				{
+					FString BoneName = (i < BoneNames.Num()) ? BoneNames[i] : FString();
+					Serialization::WriteString(Ar, BoneName);
+				}
+			}
+		}
+		else
+		{
+			Data.VertexBoneNames.resize(VertexBoneNamesCount);
+			for (auto& BoneNames : Data.VertexBoneNames)
+			{
+				BoneNames.resize(4);
+				for (int i = 0; i < 4; i++)
+				{
+					Serialization::ReadString(Ar, BoneNames[i]);
+				}
 			}
 		}
 
@@ -283,6 +316,28 @@ static void BuildSkeletalCacheData(const FSkeletalMesh* Mesh, FSkeletalCacheData
 
 	// SkinnedVertices 복사 (CPU Skinning용)
 	OutData.SkinnedVertices = Mesh->SkinnedVertices;
+
+	// BonePointers를 이름으로 변환하여 VertexBoneNames에 저장
+	OutData.VertexBoneNames.resize(Mesh->SkinnedVertices.Num());
+	for (int i = 0; i < Mesh->SkinnedVertices.Num(); i++)
+	{
+		const FSkinnedVertex& SV = Mesh->SkinnedVertices[i];
+		TArray<FString>& BoneNames = OutData.VertexBoneNames[i];
+		BoneNames.resize(4);
+
+		for (int j = 0; j < 4; j++)
+		{
+			UBone* BonePtr = SV.BonePointers[j];
+			if (BonePtr)
+			{
+				BoneNames[j] = BonePtr->GetName().ToString();
+			}
+			else
+			{
+				BoneNames[j] = FString();  // Empty string for nullptr
+			}
+		}
+	}
 }
 
 
@@ -459,9 +514,9 @@ bool TryLoadSkeletalMeshCache(const FString& MeshBinPath, const FString& MatBinP
 		Mesh->Skeleton = nullptr;
 
 		// 본 복원
+		TArray<UBone*> BonePointers;
 		if (!CacheData.Bones.empty())
 		{
-			TArray<UBone*> BonePointers;
 			USkeleton* Skeleton = RebuildSkeletonFromCache(CacheData.Bones, BonePointers);
 			Mesh->Skeleton = Skeleton;
 		}
@@ -478,6 +533,49 @@ bool TryLoadSkeletalMeshCache(const FString& MeshBinPath, const FString& MatBinP
 
 		// SkinnedVertices 복원 (CPU Skinning용)
 		Mesh->SkinnedVertices = CacheData.SkinnedVertices;
+
+		// BonePointers 복원 (이름 기반)
+		if (Mesh->Skeleton && !CacheData.VertexBoneNames.empty())
+		{
+			// Bone 이름 -> Bone 포인터 매핑 생성
+			TMap<FString, UBone*> NameToBoneMap;
+			Mesh->Skeleton->ForEachBone([&](UBone* Bone)
+			{
+				if (Bone)
+				{
+					NameToBoneMap.Add(Bone->GetName().ToString(), Bone);
+				}
+			});
+
+			// 각 정점의 BonePointers 복원
+			for (int i = 0; i < Mesh->SkinnedVertices.Num(); i++)
+			{
+				if (i >= CacheData.VertexBoneNames.Num())
+					break;
+
+				const TArray<FString>& BoneNames = CacheData.VertexBoneNames[i];
+				FSkinnedVertex& SV = Mesh->SkinnedVertices[i];
+
+				for (int j = 0; j < 4; j++)
+				{
+					if (j < BoneNames.Num() && !BoneNames[j].empty())
+					{
+						if (UBone** FoundBone = NameToBoneMap.Find(BoneNames[j]))
+						{
+							SV.BonePointers[j] = *FoundBone;
+						}
+						else
+						{
+							SV.BonePointers[j] = nullptr;
+						}
+					}
+					else
+					{
+						SV.BonePointers[j] = nullptr;
+					}
+				}
+			}
+		}
 
 		return true;
 	}
