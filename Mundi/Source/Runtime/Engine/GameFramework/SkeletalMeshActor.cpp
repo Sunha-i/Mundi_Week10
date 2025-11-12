@@ -138,10 +138,41 @@ void ASkeletalMeshActor::BuildSkeletonOverlay(UBone* SelectedBone)
     if (!SkeletonOverlay)
         return;
 
-    SkeletonOverlay->ClearLines();  // This marks cache as dirty automatically
+    // OPTIMIZATION: Reuse existing lines instead of clearing and recreating
+    // Only clear if this is the first time or structure changed
+    const TArray<ULine*>& ExistingLines = SkeletonOverlay->GetLines();
+
+    // Build into temporary array first to check if we need to recreate
+    static TArray<FLineData> TempLineData;
+    TempLineData.clear();
 
     const FTransform ComponentInverse = SkeletalMeshComponent->GetWorldTransform().Inverse();
-    BuildSkeletonLinesRecursive(Skeleton->GetRoot(), ComponentInverse, SkeletonOverlay, SelectedBone);
+    BuildSkeletonLinesRecursive_Temp(Skeleton->GetRoot(), ComponentInverse, TempLineData, SelectedBone);
+
+    // If line count matches, update existing lines (FAST PATH)
+    // 개수 체크 
+    if (ExistingLines.size() == TempLineData.size())
+    {
+        for (size_t i = 0; i < ExistingLines.size(); ++i)
+        {
+            if (ExistingLines[i])
+            {
+                ExistingLines[i]->SetLine(TempLineData[i].Start, TempLineData[i].End);
+                ExistingLines[i]->SetColor(TempLineData[i].Color);
+            }
+        }
+        SkeletonOverlay->MarkWorldDataDirty();  // Mark cache dirty to recalculate world coords
+    }
+    else
+    {
+        // Structure changed, need to recreate (SLOW PATH)
+        SkeletonOverlay->ClearLines();
+        for (const FLineData& LineData : TempLineData)
+        {
+            SkeletonOverlay->AddLine(LineData.Start, LineData.End, LineData.Color);
+        }
+    }
+
     SkeletonOverlay->SetLineVisible(true);
 }
 
@@ -200,7 +231,7 @@ void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, cons
         return;
 
     const float Radius = 0.015f;
-    const int32 Segments = 8;  // Reduced from 16 to 8 for performance (50% fewer lines)
+    const int32 Segments = 8;
     const float DeltaAngle = 2.0f * 3.1415926535f / Segments;
 
     // 기본 축 3개 (회전 적용 전)
@@ -228,6 +259,111 @@ void ASkeletalMeshActor::AddJointSphereOriented(const FVector& CenterLocal, cons
             PrevPoint = CurrPoint;
         }
     }
+}
+
+void ASkeletalMeshActor::BuildSkeletonLinesRecursive_Temp(UBone* Bone, const FTransform& ComponentWorldInverse, TArray<FLineData>& OutLines, UBone* SelectedBone)
+{
+    if (!Bone)
+        return;
+
+    const FTransform BoneWorld = Bone->GetWorldTransform();
+    const FVector ParentLocal = ComponentWorldInverse.TransformPosition(BoneWorld.Translation);
+    const FQuat RotationLocal = ComponentWorldInverse.Rotation.Inverse() * BoneWorld.Rotation;
+
+    const bool bIsSelected = (Bone == SelectedBone);
+    const FVector4 JointColor = bIsSelected ? FVector4(0.2f, 1.0f, 0.2f, 1.0f) : FVector4(1.f, 1.f, 1.f, 1.f);
+
+    AddJointSphereOriented_Temp(ParentLocal, RotationLocal, OutLines, JointColor);
+
+    for (UBone* Child : Bone->GetChildren())
+    {
+        if (!Child)
+            continue;
+
+        const FVector ChildLocal = ComponentWorldInverse.TransformPosition(Child->GetWorldLocation());
+
+        FVector4 PyramidColor = FVector4(1.f, 1.f, 1.f, 1.f);
+        if (bIsSelected)
+        {
+            PyramidColor = FVector4(0.2f, 1.0f, 0.2f, 1.0f);
+        }
+        else if (Child == SelectedBone)
+        {
+            PyramidColor = FVector4(1.0f, 0.5f, 0.0f, 1.0f);
+        }
+
+        AddBonePyramid_Temp(ParentLocal, ChildLocal, OutLines, PyramidColor);
+        BuildSkeletonLinesRecursive_Temp(Child, ComponentWorldInverse, OutLines, SelectedBone);
+    }
+}
+
+void ASkeletalMeshActor::AddJointSphereOriented_Temp(const FVector& CenterLocal, const FQuat& RotationLocal, TArray<FLineData>& OutLines, const FVector4& Color)
+{
+    const float Radius = 0.015f;
+    const int32 Segments = 8;
+    const float DeltaAngle = 2.0f * 3.1415926535f / Segments;
+
+    const FVector Axes[3] = {
+        FVector(1.f, 0.f, 0.f),
+        FVector(0.f, 1.f, 0.f),
+        FVector(0.f, 0.f, 1.f)
+    };
+
+    for (int AxisIdx = 0; AxisIdx < 3; ++AxisIdx)
+    {
+        FVector Axis1 = RotationLocal.RotateVector(Axes[AxisIdx]);
+        FVector Axis2 = RotationLocal.RotateVector(Axes[(AxisIdx + 1) % 3]);
+
+        FVector PrevPoint = CenterLocal + Axis1 * Radius;
+
+        for (int i = 1; i <= Segments; ++i)
+        {
+            const float Angle = i * DeltaAngle;
+            const float CosA = cosf(Angle);
+            const float SinA = sinf(Angle);
+
+            FVector CurrPoint = CenterLocal + (Axis1 * CosA + Axis2 * SinA) * Radius;
+            OutLines.push_back(FLineData(PrevPoint, CurrPoint, Color));
+            PrevPoint = CurrPoint;
+        }
+    }
+}
+
+void ASkeletalMeshActor::AddBonePyramid_Temp(const FVector& ParentLocal, const FVector& ChildLocal, TArray<FLineData>& OutLines, const FVector4& Color)
+{
+    FVector Dir = ChildLocal - ParentLocal;
+    float Length = Dir.Size();
+    if (Length < KINDA_SMALL_NUMBER)
+        return;
+
+    FVector Forward = Dir / Length;
+
+    FVector Up(0.f, 0.f, 1.f);
+    if (fabsf(FVector::Dot(Up, Forward)) > 0.99f)
+    {
+        Up = FVector(0.f, 1.f, 0.f);
+    }
+
+    FVector Right = FVector::Cross(Up, Forward).GetSafeNormal();
+    FVector TrueUp = FVector::Cross(Forward, Right).GetSafeNormal();
+
+    float BaseRadius = std::min(Length * 0.05f, 0.01f);
+
+    FVector BaseA = ParentLocal + (Right * BaseRadius) + (TrueUp * BaseRadius);
+    FVector BaseB = ParentLocal - (Right * BaseRadius) + (TrueUp * BaseRadius);
+    FVector BaseC = ParentLocal - (TrueUp * BaseRadius * 1.5f);
+
+    FVector Apex = ChildLocal;
+
+    // Base triangle
+    OutLines.push_back(FLineData(BaseA, BaseB, Color));
+    OutLines.push_back(FLineData(BaseB, BaseC, Color));
+    OutLines.push_back(FLineData(BaseC, BaseA, Color));
+
+    // Apex connections
+    OutLines.push_back(FLineData(BaseA, Apex, Color));
+    OutLines.push_back(FLineData(BaseB, Apex, Color));
+    OutLines.push_back(FLineData(BaseC, Apex, Color));
 }
 
 void ASkeletalMeshActor::AddBonePyramid(const FVector& ParentLocal, const FVector& ChildLocal, ULineComponent* SkeletonLineComponent, const FVector4& Color)
