@@ -194,6 +194,8 @@ void USkeletalMesh::DuplicateSubObjects()
     {
         Load(AssetPath, GEngine.GetRHIDevice()->GetDevice());
     }
+
+    UpdateCPUSkinningDirty = true;
 }
 
 // ============================================================================
@@ -201,6 +203,8 @@ void USkeletalMesh::DuplicateSubObjects()
 // ============================================================================
 void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
 {
+    if (!UpdateCPUSkinningDirty)
+        return;
     if (!SkeletalMeshAsset || !SkeletalMeshAsset->Skeleton)
         return;
 
@@ -214,28 +218,6 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
     {
         TransformedVertices.resize(VertexCount);
     }
-
-    // 2. Bone Skinning Matrix 배열 준비
-    // 먼저 Bone 개수를 세어서 배열 크기 확보
-    int32 BoneCount = 0;
-    SkeletalMeshAsset->Skeleton->ForEachBone([&BoneCount](UBone* Bone)
-    {
-        if (Bone) BoneCount++;
-    });
-
-    // TArray<FMatrix> BoneMatrices;
-    // BoneMatrices.resize(BoneCount);
-
-    // 각 Bone의 인덱스에 맞춰 매트릭스 저장
-    // int32 BoneIndex = 0;
-    // SkeletalMeshAsset->Skeleton->ForEachBone([&](UBone* Bone)
-    // {
-    //     if (Bone && BoneIndex < BoneCount)
-    //     {
-    //         BoneMatrices[BoneIndex] = Bone->GetSkinningMatrix();
-    //         BoneIndex++;
-    //     }
-    // });
 
     // 3. 각 정점마다 CPU Skinning 수행
     for (int i = 0; i < VertexCount; i++)
@@ -314,4 +296,11 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             DeviceContext->Unmap(VertexBuffer, 0);
         }
     }
+
+    UpdateCPUSkinningDirty = false;
+}
+
+void USkeletalMesh::MarkAsDirty()
+{
+    UpdateCPUSkinningDirty = true;
 }

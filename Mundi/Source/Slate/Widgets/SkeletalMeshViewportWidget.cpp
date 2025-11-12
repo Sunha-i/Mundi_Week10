@@ -391,9 +391,6 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		ImGui::Text("Parent:");
 		ImGui::Indent();
 
-		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
-		USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent();
-
 		UBone* ParentBone = SelectedBone->GetParent();
 
 		ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "%s", ParentBone ? ParentBone->GetName().ToString().c_str() : "(Root)");
@@ -464,10 +461,13 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		bChanged |= ImGui::DragFloat("Z##Scl", &RelScale.Z, 0.01f);
 		ImGui::PopID();
 
+		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
+		
 		// 값이 변경되면 적용
 		if (bChanged)
 		{
 			FTransform NewTransform(RelLoc, FQuat::MakeFromEulerZYX(RelRot), RelScale);
+			SkelActor->GetSkeletalMeshComponent()->GetSkeletalMesh()->MarkAsDirty();
 			SelectedBone->SetRelativeTransform(NewTransform);
 			MarkSkeletonOverlayDirty();
 		}
