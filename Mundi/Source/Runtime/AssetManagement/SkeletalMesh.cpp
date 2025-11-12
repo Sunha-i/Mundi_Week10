@@ -229,6 +229,7 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
     // 2.1 Bone 포인터 → 인덱스 매핑 생성
     TMap<UBone*, int32> BoneToIndexMap;
     TArray<FMatrix> BoneMatrices;
+    TArray<FMatrix> BoneInverseMatrices;  // Normal 변환용 Inverse 행렬 캐시
 
     int32 BoneIndex = 0;
     SkeletalMeshAsset->Skeleton->ForEachBone([&](UBone* Bone)
@@ -244,6 +245,10 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
             BoneMatrices.Add(SkinningMatrix);
 
+            // Normal 변환용 Inverse 행렬 계산 (비균등 스케일 대응)
+            FMatrix InverseSkinningMatrix = SkinningMatrix.Transpose().InverseAffine();
+            BoneInverseMatrices.Add(InverseSkinningMatrix);
+
             BoneIndex++;
         }
     });
@@ -254,26 +259,27 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
         const FSkinnedVertex& SrcVertex = SkinnedVerts[i];
         FVertexDynamic& DstVertex = TransformedVertices[i];
 
-        // 원본 데이터 복사 (UV, Tangent, Color는 변환 안 함)
+        // 원본 데이터 복사 (UV, Color는 변환 안 함)
         DstVertex.UV = SrcVertex.UV;
-        DstVertex.Tangent = SrcVertex.Tangent;
         DstVertex.Color = SrcVertex.Color;
 
-        // Skinning 계산: Position과 Normal을 Bone Matrix로 변환
+        // Skinning 계산: Position, Normal, Tangent를 Bone Matrix로 변환
         // 먼저 총 Weight 확인
         float TotalWeight = SrcVertex.BoneWeights[0] + SrcVertex.BoneWeights[1] +
                            SrcVertex.BoneWeights[2] + SrcVertex.BoneWeights[3];
 
-        // Weight가 없는 정점은 원본 위치 유지 (Rigid Body)
+        // Weight가 없는 정점은 원본 유지 (Rigid Body)
         if (TotalWeight < 0.0001f)
         {
             DstVertex.Position = SrcVertex.Position;
             DstVertex.Normal = SrcVertex.Normal;
+            DstVertex.Tangent = SrcVertex.Tangent;
             continue;
         }
 
         FVector SkinnedPosition(0, 0, 0);
         FVector SkinnedNormal(0, 0, 0);
+        FVector SkinnedTangent(0, 0, 0);
 
         for (int j = 0; j < 4; j++)
         {
@@ -291,23 +297,33 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
                 continue;
 
             const FMatrix& SkinningMatrix = BoneMatrices[*BoneIndexPtr];
+            const FMatrix& InverseSkinningMatrix = BoneInverseMatrices[*BoneIndexPtr];
 
             // Position 변환
             FVector TransformedPos = SrcVertex.Position * SkinningMatrix;
             SkinnedPosition += TransformedPos * Weight;
 
-            // Normal 변환 (Rotation만 적용)
-            FMatrix RotationOnlyMatrix = SkinningMatrix;
-            RotationOnlyMatrix.M[3][0] = 0.0f;
-            RotationOnlyMatrix.M[3][1] = 0.0f;
-            RotationOnlyMatrix.M[3][2] = 0.0f;
-
-            FVector TransformedNormal = SrcVertex.Normal * RotationOnlyMatrix;
+            // Normal 변환 (비균등 스케일 대응: Inverse Transpose 사용)
+            FVector TransformedNormal = SrcVertex.Normal * InverseSkinningMatrix;
             SkinnedNormal += TransformedNormal * Weight;
+
+            // Tangent 변환 (Normal과 동일하게 Inverse Transpose 적용)
+            FVector SrcTangent3(SrcVertex.Tangent.X, SrcVertex.Tangent.Y, SrcVertex.Tangent.Z);
+            FVector TransformedTangent = SrcTangent3 * SkinningMatrix;
+            SkinnedTangent += TransformedTangent * Weight;
         }
 
+        // Normal 정규화
         DstVertex.Position = SkinnedPosition;
         DstVertex.Normal = SkinnedNormal.GetNormalized();
+
+        // Gram-Schmidt 직교화: Tangent를 Normal에 대해 직교하게 만듦
+        FVector OrthogonalTangent = SkinnedTangent - DstVertex.Normal * FVector::Dot(SkinnedTangent, DstVertex.Normal);
+        OrthogonalTangent.Normalize();
+
+        // Handedness(w값) 유지
+        float Handedness = SrcVertex.Tangent.W;
+        DstVertex.Tangent = FVector4(OrthogonalTangent.X, OrthogonalTangent.Y, OrthogonalTangent.Z, Handedness);
     }
 
     // 4. Dynamic Vertex Buffer 업데이트

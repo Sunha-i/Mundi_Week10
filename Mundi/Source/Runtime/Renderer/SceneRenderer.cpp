@@ -154,10 +154,14 @@ ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 Targ
 	ID3D11Texture2D* TempDepth = nullptr;
 	ID3D11DepthStencilView* TempDSV = nullptr;
 
-	HRESULT hr = RHIDevice->CreateRenderTargetWithDepth(
-		TargetWidth, TargetHeight,
-		&ResultTexture, &ResultRTV,
-		&TempDepth, &TempDSV);
+	HRESULT hr = RHIDevice->GetOrCreateTextureWithTarget(
+		TargetWidth,
+		TargetHeight,
+		&ResultTexture,
+		&ResultRTV,
+		&TempDepth,
+		&TempDSV
+	);
 
 	if (FAILED(hr) || !ResultTexture)
 	{
@@ -187,10 +191,6 @@ ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 Targ
 	if (!SourceSRV || !SamplerState)
 	{
 		UE_LOG("[RenderToTexture] Error: Missing resources for composite");
-		ResultRTV->Release();
-		ResultTexture->Release();
-		TempDepth->Release();
-		TempDSV->Release();
 		return nullptr;
 	}
 
@@ -204,10 +204,6 @@ ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 Targ
 	if (!FullScreenTriangleVS || !FullScreenTriangleVS->GetVertexShader() || !BlitPS || !BlitPS->GetPixelShader())
 	{
 		UE_LOG("[RenderToTexture] Error: Blit shader not found");
-		ResultRTV->Release();
-		ResultTexture->Release();
-		TempDepth->Release();
-		TempDSV->Release();
 		return nullptr;
 	}
 	RHIDevice->PrepareShader(FullScreenTriangleVS, BlitPS);
@@ -217,11 +213,6 @@ ID3D11Texture2D* FSceneRenderer::RenderToTexture(uint32 TargetWidth, uint32 Targ
 
 	// 모든 작업이 성공했으므로 Commit
 	SwapGuard.Commit();
-
-	// Cleanup (Texture는 반환하므로 Release 안함)
-	ResultRTV->Release();
-	TempDepth->Release();
-	TempDSV->Release();
 
 	// RenderToTexture가 사용한 SceneColor 버퍼를 청소하여 메인 World에 영향 없도록 함
 	float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };

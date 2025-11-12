@@ -153,6 +153,25 @@ public:
 										 ID3D11Texture2D** OutDepthTexture,
 										 ID3D11DepthStencilView** OutDepthDSV);
 
+	struct FTextureWidthTarget
+	{
+		ID3D11Texture2D* Texture{};
+		ID3D11RenderTargetView* RTV{};
+		ID3D11Texture2D* DepthTexture{};
+		ID3D11DepthStencilView* DepthDSV{};
+	};
+	
+	TMap<FString, FTextureWidthTarget> TextureTargets;
+	
+	HRESULT GetOrCreateTextureWithTarget(
+		UINT Width,
+		UINT Height,
+		ID3D11Texture2D** OutColorTexture,
+		ID3D11RenderTargetView** OutColorRTV,
+		ID3D11Texture2D** OutDepthTexture,
+		ID3D11DepthStencilView** OutDepthDSV
+	);
+	
 	/** @brief RenderTarget + DepthStencil 해제 */
 	void ReleaseRenderTargetWithDepth(ID3D11Texture2D** ColorTexture,
 									   ID3D11RenderTargetView** ColorRTV,
