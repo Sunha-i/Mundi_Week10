@@ -99,20 +99,8 @@ void USkeletalMeshViewportWidget::SetSkeletalMeshToViewport(const FName& InTarge
 		PreviewActor = nullptr;
 	}
 
-	// Actor 생성 및 Mesh 설정
-	ASkeletalMeshActor* SkeletalMeshActor = NewObject<ASkeletalMeshActor>();
-
-	USkeletalMeshComponent* MeshComp = SkeletalMeshActor->GetSkeletalMeshComponent();
-	if (MeshComp)
-	{
-		MeshComp->SetSkeletalMesh(TargetMeshName.ToString());
-	}
-	else
-	{
-		UE_LOG("[SkeletalMeshViewportWidget] Error: SkeletalMeshComponent is null");
-	}
-
-	WorldForPreviewManager.SetActor(SkeletalMeshActor);
+	WorldForPreviewManager.SetSkelMeshActor(TargetMeshName.ToString());
+	ASkeletalMeshActor* SkeletalMeshActor = WorldForPreviewManager.GetSkelMeshActor();
 	PreviewWorld->AddEditorActor(SkeletalMeshActor);
 	PreviewActor = SkeletalMeshActor;
 	MarkSkeletonOverlayDirty();
@@ -403,37 +391,10 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		ImGui::Text("Parent:");
 		ImGui::Indent();
 
-		UWorld* PreviewWorld = WorldForPreviewManager.GetWorldForPreview();
-		UBone* ParentBone = nullptr;
-		if (PreviewWorld && !PreviewWorld->GetActors().empty())
-		{
-			for (AActor* Actor : PreviewWorld->GetActors())
-			{
-				if (ASkeletalMeshActor* SkelActor = Cast<ASkeletalMeshActor>(Actor))
-				{
-					USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent();
-					if (MeshComp && MeshComp->GetSkeletalMesh())
-					{
-						USkeleton* Skeleton = MeshComp->GetSkeletalMesh()->GetSkeletalMeshAsset()->Skeleton;
-						if (Skeleton)
-						{
-							// Root부터 재귀적으로 Parent 찾기
-							Skeleton->ForEachBone([&](UBone* Bone) {
-								for (UBone* Child : Bone->GetChildren())
-								{
-									if (Child == SelectedBone)
-									{
-										ParentBone = Bone;
-										return;
-									}
-								}
-							});
-						}
-					}
-					break;
-				}
-			}
-		}
+		ASkeletalMeshActor* SkelActor = WorldForPreviewManager.GetSkelMeshActor();
+		USkeletalMeshComponent* MeshComp = SkelActor->GetSkeletalMeshComponent();
+
+		UBone* ParentBone = SelectedBone->GetParent();
 
 		ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "%s", ParentBone ? ParentBone->GetName().ToString().c_str() : "(Root)");
 		ImGui::Unindent();

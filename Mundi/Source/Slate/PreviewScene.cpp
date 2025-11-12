@@ -1,5 +1,5 @@
 ﻿#include "pch.h"
-#include "FPreviewScene.h"
+#include "PreviewScene.h"
 
 void FPreviewScene::CreateWorldForPreviewScene()
 {
