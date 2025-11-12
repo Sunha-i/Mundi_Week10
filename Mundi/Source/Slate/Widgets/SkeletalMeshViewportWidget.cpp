@@ -438,14 +438,16 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		FQuat RelQuat = RelTransform.Rotation;
 		FVector RelScale = RelTransform.Scale3D;
 
-		// 편집 가능한 Euler 각 (매 프레임 현재 Quaternion에서 변환)
+		// 하이브리드 방식: Euler 각 직접 수정 + Delta만 Quaternion 적용
 		static FVector EditableEuler(0, 0, 0);
+		static FVector PreviousEuler(0, 0, 0);
 		static UBone* LastSelectedBone = nullptr;
 
 		// Bone이 바뀌면 Euler 각 초기화
 		if (LastSelectedBone != SelectedBone)
 		{
 			EditableEuler = RelQuat.ToEulerZYXDeg();
+			PreviousEuler = EditableEuler;
 			LastSelectedBone = SelectedBone;
 		}
 
@@ -460,18 +462,46 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		bLocationChanged |= ImGui::DragFloat("Z##Loc", &RelLoc.Z, 0.1f);
 		ImGui::PopID();
 
-		ImGui::Text("Rotation (Euler → Quaternion):");
+		ImGui::Text("Rotation:");
 		ImGui::PushID("Rotation");
 
 		bool bRotXChanged = ImGui::DragFloat("X (Roll)##Rot", &EditableEuler.X, 0.5f);
 		bool bRotYChanged = ImGui::DragFloat("Y (Pitch)##Rot", &EditableEuler.Y, 0.5f);
 		bool bRotZChanged = ImGui::DragFloat("Z (Yaw)##Rot", &EditableEuler.Z, 0.5f);
 
-		// Euler 각이 변경되면 Quaternion으로 변환
+		// Euler 각이 변경되면 Delta만큼 Quaternion 증분 회전
 		if (bRotXChanged || bRotYChanged || bRotZChanged)
 		{
-			RelQuat = FQuat::MakeFromEulerZYX(EditableEuler);
+			// 변화량(Delta) 계산
+			FVector DeltaEuler = EditableEuler - PreviousEuler;
+
+			// Delta를 Quaternion 증분 회전으로 변환
+			FQuat DeltaQuat = FQuat::Identity();
+
+			if (std::fabs(DeltaEuler.X) > 0.01f)
+			{
+				FQuat RotX = FQuat::FromAxisAngle(FVector(1, 0, 0), DegreesToRadians(DeltaEuler.X));
+				DeltaQuat = DeltaQuat * RotX;
+			}
+			if (std::fabs(DeltaEuler.Y) > 0.01f)
+			{
+				FQuat RotY = FQuat::FromAxisAngle(FVector(0, 1, 0), DegreesToRadians(DeltaEuler.Y));
+				DeltaQuat = DeltaQuat * RotY;
+			}
+			if (std::fabs(DeltaEuler.Z) > 0.01f)
+			{
+				FQuat RotZ = FQuat::FromAxisAngle(FVector(0, 0, 1), DegreesToRadians(DeltaEuler.Z));
+				DeltaQuat = DeltaQuat * RotZ;
+			}
+
+			// 현재 Quaternion에 증분 적용 (Local Space)
+			RelQuat = RelQuat * DeltaQuat;
 			RelQuat.Normalize();
+
+			// EditableEuler는 사용자 입력값을 유지 (Quaternion에서 재추출하지 않음)
+			// 이렇게 하면 UI 표시가 사용자 입력과 일치하게 유지됨
+			PreviousEuler = EditableEuler;
+
 			bRotationChanged = true;
 		}
 
@@ -480,6 +510,7 @@ void USkeletalMeshViewportWidget::RenderBoneInformationPanel(float Width, float 
 		{
 			RelQuat = FQuat::Identity();
 			EditableEuler = FVector(0, 0, 0);
+			PreviousEuler = FVector(0, 0, 0);
 			bRotationChanged = true;
 		}
 
