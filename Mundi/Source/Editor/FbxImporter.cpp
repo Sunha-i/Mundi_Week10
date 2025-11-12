@@ -88,6 +88,16 @@ void FFbxImporter::CollectMaterials(FbxScene* Scene, const FString& Path,
 			Info.DiffuseTextureFileName = ExtractTexturePath(DiffProp);
 		}
 
+		// Normal Map 추출 (FBX에서는 NormalMap 또는 Bump로 저장됨)
+		if (auto NormalProp = Mat->FindProperty(FbxSurfaceMaterial::sNormalMap); NormalProp.IsValid())
+		{
+			Info.NormalTextureFileName = ExtractTexturePath(NormalProp);
+		}
+		else if (auto BumpProp = Mat->FindProperty(FbxSurfaceMaterial::sBump); BumpProp.IsValid())
+		{
+			Info.NormalTextureFileName = ExtractTexturePath(BumpProp);
+		}
+
 		OutMatMap.Add(MatID, Info);
 		OutInfos.Add(Info);
 	}
