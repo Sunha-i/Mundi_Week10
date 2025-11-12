@@ -187,7 +187,9 @@ void USkeletalMeshViewportWidget::RenderBoneHierarchyPanel(float Width, float He
 		}
 
 		// Root Bone부터 재귀적으로 렌더링
+		ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
 		RenderBoneNode(Skeleton->GetRoot());
+		ImGui::PopStyleVar();
 	}
 	ImGui::EndChild();
 }
