@@ -34,9 +34,9 @@ AGizmoActor::AGizmoActor()
 	ArrowY->SetDirection(FVector(0.0f, 1.0f, 0.0f));//초
 	ArrowZ->SetDirection(FVector(0.0f, 0.0f, 1.0f));//파
 
-	ArrowX->SetColor(FVector(1.0f, 0.0f, 0.0f));
-	ArrowY->SetColor(FVector(0.0f, 1.0f, 0.0f));
-	ArrowZ->SetColor(FVector(0.0f, 0.0f, 1.0f));
+	ArrowX->SetColor(FVector(0.456f, 0.043f, 0.067f));
+	ArrowY->SetColor(FVector(0.159f, 0.538f, 0.080f));
+	ArrowZ->SetColor(FVector(0.054f, 0.155f, 0.527f));
 
 	ArrowX->SetupAttachment(RootComponent, EAttachmentRule::KeepRelative);
 	ArrowY->SetupAttachment(RootComponent, EAttachmentRule::KeepRelative);
@@ -70,9 +70,9 @@ AGizmoActor::AGizmoActor()
 	RotateY->SetDirection(FVector(0.0f, 1.0f, 0.0f));
 	RotateZ->SetDirection(FVector(0.0f, 0.0f, 1.0f));
 
-	RotateX->SetColor(FVector(1.0f, 0.0f, 0.0f));
-	RotateY->SetColor(FVector(0.0f, 1.0f, 0.0f));
-	RotateZ->SetColor(FVector(0.0f, 0.0f, 1.0f));
+	RotateX->SetColor(FVector(0.456f, 0.043f, 0.067f));
+	RotateY->SetColor(FVector(0.159f, 0.538f, 0.080f));
+	RotateZ->SetColor(FVector(0.054f, 0.155f, 0.527f));
 
 	RotateX->SetupAttachment(RootComponent, EAttachmentRule::KeepRelative);
 	RotateY->SetupAttachment(RootComponent, EAttachmentRule::KeepRelative);
@@ -106,9 +106,9 @@ AGizmoActor::AGizmoActor()
 	ScaleY->SetDirection(FVector(0.0f, 1.0f, 0.0f));
 	ScaleZ->SetDirection(FVector(0.0f, 0.0f, 1.0f));
 
-	ScaleX->SetColor(FVector(1.0f, 0.0f, 0.0f));
-	ScaleY->SetColor(FVector(0.0f, 1.0f, 0.0f));
-	ScaleZ->SetColor(FVector(0.0f, 0.0f, 1.0f));
+	ScaleX->SetColor(FVector(0.456f, 0.043f, 0.067f));
+	ScaleY->SetColor(FVector(0.159f, 0.538f, 0.080f));
+	ScaleZ->SetColor(FVector(0.054f, 0.155f, 0.527f));
 
 	ScaleX->SetupAttachment(RootComponent, EAttachmentRule::KeepRelative);
 	ScaleY->SetupAttachment(RootComponent, EAttachmentRule::KeepRelative);

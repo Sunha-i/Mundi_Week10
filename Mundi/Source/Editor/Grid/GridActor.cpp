@@ -81,17 +81,17 @@ void AGridActor::CreateAxisLines(float Length, const FVector& Origin)
     // X축 - 빨강
     LineComponent->AddLine(Origin, 
                           Origin + FVector(Length * CellSize, 0.0f, 0.0f),
-                          FVector4(1.0f, 0.0f, 0.0f, 1.0f));
+                          FVector4(0.456f, 0.043f, 0.067f, 1.0f));
     
     // Y축 - 초록
     LineComponent->AddLine(Origin, 
                           Origin + FVector(0.0f, Length * CellSize, 0.0f),
-                          FVector4(0.0f, 1.0f, 0.0f, 1.0f));
+                          FVector4(0.159f, 0.538f, 0.080f, 1.0f));
     
     // Z축 - 파랑
     LineComponent->AddLine(Origin, 
                           Origin + FVector(0.0f, 0.0f, Length * CellSize),
-                          FVector4(0.0f, 0.0f, 1.0f, 1.0f));
+                          FVector4(0.054f, 0.155f, 0.527f, 1.0f));
 }
 
 void AGridActor::ClearLines()

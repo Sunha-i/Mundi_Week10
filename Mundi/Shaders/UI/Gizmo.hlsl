@@ -95,7 +95,7 @@ PS_OUTPUT mainPS(PS_INPUT input)
     
     // Define ambient and diffuse lighting
     float ambient = 0.22f;          // Minimum shadow brightness
-    float diffuseIntensity = 0.6f;  // Additional brightness
+    float diffuseIntensity = 0.9f;  // Additional brightness
     float diffuse = ambient + diffuseIntensity * NdotL;
     
     // Final color is base color modulated by lighting
