@@ -21,6 +21,9 @@ public:
     template<typename Func>
     void ForEachBone(Func&& InFunc);
 
+    // CPU Skinning 최적화: 모든 본의 WorldBindPose와 InverseBindPoseMatrix 캐싱
+    void CacheAllWorldBindPoses();
+
 private:
     UBone* Root{};
 

@@ -147,37 +147,48 @@ void UBone::SetRelativeBindPoseTransform(const FTransform& InBindPoseTransform)
     BindPose = InBindPoseTransform;
 }
 
-// World BindPos Getter
+// World BindPos Getter (캐시된 값 반환)
 FVector UBone::GetWorldBindPoseLocation() const
 {
-    if (!Parent)
-        return GetRelativeBindPoseLocation();
-    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
-    return ParentWorldBindPose.GetWorldTransform(BindPose).Translation;
+    return WorldBindPose.Translation;
 }
 
 FQuat UBone::GetWorldBindPoseRotation() const
 {
-    if (!Parent)
-        return GetRelativeBindPoseRotation();
-    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
-    return ParentWorldBindPose.GetWorldTransform(BindPose).Rotation;
+    return WorldBindPose.Rotation;
 }
 
 FVector UBone::GetWorldBindPoseScale() const
 {
-    if (!Parent)
-        return GetRelativeBindPoseScale();
-    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
-    return ParentWorldBindPose.GetWorldTransform(BindPose).Scale3D;
+    return WorldBindPose.Scale3D;
 }
 
-FTransform UBone::GetWorldBindPose() const
+const FTransform& UBone::GetWorldBindPose() const
 {
+    return WorldBindPose;
+}
+
+// CPU Skinning 최적화: WorldBindPose와 InverseBindPoseMatrix 캐싱
+const FMatrix& UBone::GetInverseBindPoseMatrix() const
+{
+    return InverseBindPoseMatrix;
+}
+
+void UBone::CacheWorldBindPose()
+{
+    // WorldBindPose 계산 (부모가 있으면 부모의 WorldBindPose와 합성)
     if (!Parent)
-        return GetRelativeBindPose();
-    FTransform ParentWorldBindPose = Parent->GetWorldBindPose();
-    return ParentWorldBindPose.GetWorldTransform(BindPose);
+    {
+        WorldBindPose = BindPose;
+    }
+    else
+    {
+        const FTransform& ParentWorldBindPose = Parent->GetWorldBindPose();
+        WorldBindPose = ParentWorldBindPose.GetWorldTransform(BindPose);
+    }
+
+    // InverseBindPoseMatrix 계산
+    InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
 }
 
 // BindPos와 현 Transform의 차이를 반환

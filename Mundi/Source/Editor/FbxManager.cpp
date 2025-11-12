@@ -205,6 +205,12 @@ FSkeletalMesh* FFbxManager::LoadFbxSkeletalMeshAsset(const FString& PathFileName
 			TArray<FMaterialInfo> CachedMaterials;
 			if (TryLoadSkeletalMeshCache(CachePaths.MeshBinPath, CachePaths.MaterialBinPath, CachedMesh, CachedMaterials))
 			{
+				// CPU Skinning 최적화: 캐시 로드 후에도 WorldBindPose와 InverseBindPoseMatrix 캐싱
+				if (CachedMesh->Skeleton)
+				{
+					CachedMesh->Skeleton->CacheAllWorldBindPoses();
+				}
+
 				RegisterMaterialInfos(CachedMaterials);
 				FbxSkeletalMeshMap.Add(NormalizedPathStr, CachedMesh);
 				return CachedMesh;
@@ -314,6 +320,9 @@ FSkeletalMesh* FFbxManager::BuildSkeletalMesh(
 
 	NewMesh->Skeleton = NewObject<USkeleton>();
 	NewMesh->Skeleton->SetRoot(RootBone);
+
+	// CPU Skinning 최적화: 모든 본의 WorldBindPose와 InverseBindPoseMatrix 캐싱
+	NewMesh->Skeleton->CacheAllWorldBindPoses();
 
 	ImporterUtil->ProcessMeshNode(RootNode, NewMesh, MaterialMap);
 	FbxSkeletalMeshMap.Add(Path, NewMesh);

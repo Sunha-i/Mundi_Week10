@@ -277,12 +277,12 @@ void USkeletalMesh::UpdateCPUSkinning(ID3D11DeviceContext* DeviceContext)
             // 올바른 Skinning Matrix 계산 (Row-vector convention)
             // v' = v × InverseBindPoseMatrix × CurrentWorldMatrix
             FTransform WorldTransform = Bone->GetWorldTransform();
-            FTransform WorldBindPose = Bone->GetWorldBindPose();
+            const FMatrix& InverseBindPoseMatrix = Bone->GetInverseBindPoseMatrix();
+
 
             FMatrix CurrentWorldMatrix = WorldTransform.ToMatrix();
-            FMatrix InverseBindPoseMatrix = WorldBindPose.ToMatrix().InverseAffine();
 
-            // Row-vector: 먼저 InvBindPose, 그 다음 CurrentWorld
+            // Row-vector: 먼저 InvBindPose (캐시), 그 다음 CurrentWorld
             FMatrix SkinningMatrix = InverseBindPoseMatrix * CurrentWorldMatrix;
 
             // Position 변환

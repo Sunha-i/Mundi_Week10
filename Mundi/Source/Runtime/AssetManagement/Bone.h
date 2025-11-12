@@ -43,12 +43,16 @@ public:
     void SetRelativeBindPoseScale(const FVector& InScale);
     void SetRelativeBindPoseTransform(const FTransform& InBindPoseTransform);
 
-    // World BindPos Getter
+    // World BindPos Getter (캐시된 값 반환)
     FVector GetWorldBindPoseLocation() const;
     FQuat GetWorldBindPoseRotation() const;
     FVector GetWorldBindPoseScale() const;
-    FTransform GetWorldBindPose() const;
-    
+    const FTransform& GetWorldBindPose() const;
+
+    // CPU Skinning 최적화: WorldBindPose와 InverseBindPoseMatrix 캐싱
+    const FMatrix& GetInverseBindPoseMatrix() const;
+    void CacheWorldBindPose();  // Skeleton 로드 후 한 번만 호출
+
     // BindPos와 현 Transform의 차이를 반환
     FTransform GetBoneOffset();
     FMatrix GetSkinningMatrix();
@@ -67,9 +71,12 @@ private:
 
     // 현재 뼈의 트랜스폼 정보를 저장
     FTransform RelativeTransform{};
-    // 최초 뼈의 트랜스폼 정보를 저장
-    FTransform BindPose{};
-    
+
+    // 최초 뼈의 트랜스폼 정보 (BindPose)
+    FTransform BindPose{};                      // Local BindPose
+    FTransform WorldBindPose{};                 // World BindPose (캐시)
+    FMatrix InverseBindPoseMatrix{};            // Inverse World BindPose (캐시)
+
     UBone* Parent{};
     TArray<UBone*> Children{};
 };
